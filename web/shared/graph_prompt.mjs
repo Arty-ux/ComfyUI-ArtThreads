@@ -9,6 +9,7 @@ const postProcessors = [];
 export function registerPromptInjector(classType, fn) {
   if (!classType || typeof fn !== "function") return;
   injectors.set(classType, fn);
+  installGraphPromptHook();
 }
 
 /** Register a post-processor on the workflow object graphToPrompt returns. */
@@ -16,20 +17,53 @@ export function onGraphToPrompt(fn) {
   if (typeof fn === "function") postProcessors.push(fn);
 }
 
-export function buildNodeIndex() {
+function activeGraph() {
+  return app.graph || app.rootGraph;
+}
+
+export function buildNodeIndex(graph = activeGraph()) {
   const index = new Map();
-  const visit = (graph) => {
-    if (!graph) return;
-    const nodes = graph._nodes || graph.nodes || [];
+  const visit = (g) => {
+    if (!g) return;
+    const nodes = g._nodes || g.nodes || [];
     for (const n of nodes) {
       if (!n) continue;
       index.set(String(n.id), n);
       const inner = n.subgraph || n.graph || n._graph;
-      if (inner && inner !== graph) visit(inner);
+      if (inner && inner !== g) visit(inner);
     }
   };
-  visit(app.graph);
+  visit(graph);
   return index;
+}
+
+/** Serialized workflow.nodes fallback when the live graph node is missing. */
+export function buildWorkflowNodeIndex(workflow) {
+  const index = new Map();
+  const nodes = workflow?.nodes;
+  if (!Array.isArray(nodes)) return index;
+  for (const n of nodes) {
+    if (n?.id != null) index.set(String(n.id), n);
+  }
+  return index;
+}
+
+function workflowNodeAdapter(wfNode, classType) {
+  if (!wfNode) return null;
+  return {
+    id: wfNode.id,
+    type: wfNode.type,
+    comfyClass: classType || wfNode.type,
+    properties: wfNode.properties,
+    inputs: wfNode.inputs,
+  };
+}
+
+export function resolveNodeForPrompt(promptId, graphIndex, workflowIndex, classType) {
+  const live = findNode(graphIndex, promptId);
+  if (live) return live;
+  const wfNode = findNode(workflowIndex, promptId);
+  return workflowNodeAdapter(wfNode, classType);
 }
 
 export function findNode(index, promptId) {
@@ -67,13 +101,15 @@ export function installGraphPromptHook() {
     try {
       const out = result?.output;
       if (out) {
-        let index = null;
+        let graphIndex = null;
+        let workflowIndex = null;
         for (const id in out) {
           const entry = out[id];
           const fn = injectors.get(entry?.class_type);
           if (!fn) continue;
-          if (!index) index = buildNodeIndex();
-          const node = findNode(index, id);
+          if (!graphIndex) graphIndex = buildNodeIndex();
+          if (!workflowIndex) workflowIndex = buildWorkflowNodeIndex(result?.workflow);
+          const node = resolveNodeForPrompt(id, graphIndex, workflowIndex, entry?.class_type);
           if (node) fn(node, entry);
         }
       }

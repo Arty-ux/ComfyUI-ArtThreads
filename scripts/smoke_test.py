@@ -145,6 +145,11 @@ def check_workflow() -> None:
     else:
         fail("phase B duration → length wiring")
 
+    if 14 not in nodes:
+        ok("T8 Duration Planner removed (node 14)")
+    else:
+        fail("T8 Duration Planner still present")
+
     for lid, nid in [(54, 13), (55, 29), (56, 30), (57, 31)]:
         if links.get(lid, [None] * 5)[1:5] != [34, 1, nid, 0]:
             fail(f"Duration.seconds -> LoadAudio node {nid} (link {lid})")
@@ -152,17 +157,25 @@ def check_workflow() -> None:
     else:
         ok("Duration.seconds -> all 4 LoadAudio nodes")
 
+    for lid, slot, target in [(22, 4, 15), (23, 5, 15), (45, 2, 23), (46, 3, 23)]:
+        row = links.get(lid)
+        if not row or row[1:5] != [34, slot, target, row[4]]:
+            fail(f"Duration timing output link {lid}")
+            break
+    else:
+        ok("Duration -> trim/slice links 22/23/45/46")
+
     if links.get(28, [None] * 5)[1:5] == [21, 0, 22, 3]:
         ok("ref images link 28 only to H3")
     else:
         fail("ref images wiring")
 
     for lid in (22, 23, 45, 46):
-        if links.get(lid, [None] * 6)[1] != 14:
+        if links.get(lid, [None] * 6)[1] != 34:
             fail(f"T8 trim link {lid}")
             break
     else:
-        ok("T8 trim links 22/23/45/46 preserved")
+        ok("trim/slice links 22/23/45/46 from Duration")
 
     extra = wf.get("extra") or {}
     if extra.get("generation_resolution") == {"width": 896, "height": 512}:
@@ -194,7 +207,7 @@ def check_nodes_optional() -> None:
 
         frames, seconds = ArtThreadsDuration().run(
             DurationState='{"seconds":5,"fps":24,"step":17,"plus":5,"minFrames":5,"mode":"recipe"}'
-        )
+        )[:2]
         if frames == 124:
             ok("ArtThreadsDuration.run 5s -> 124 frames")
         else:

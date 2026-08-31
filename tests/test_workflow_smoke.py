@@ -83,12 +83,18 @@ def test_upscale_wiring():
 
 def test_duration_phase_b_wiring():
     wf = _load(WORKFLOW)
+    nodes = _node_map(wf)
     links = _links_by_id(wf)
 
+    assert 14 not in nodes
+    assert "MiniMaxH3DurationPlannerT8" not in {n["type"] for n in wf["nodes"]}
     assert 32 not in links
+    assert 58 not in links
     assert links[53][1:5] == [34, 0, 22, 12]
     for lid, load_id in [(54, 13), (55, 29), (56, 30), (57, 31)]:
         assert links[lid][1:5] == [34, 1, load_id, 0]
+    for lid, slot in [(22, 4), (23, 5), (45, 2), (46, 3)]:
+        assert links[lid][1:5] == [34, slot, links[lid][3], links[lid][4]]
 
 
 def test_ref_images_not_connected_to_size():
@@ -103,12 +109,12 @@ def test_ref_images_not_connected_to_size():
         assert links[lid][1] != 21
 
 
-def test_t8_trim_links_preserved():
+def test_t8_trim_links_from_duration():
     wf = _load(WORKFLOW)
     links = _links_by_id(wf)
-    for lid in (22, 23, 45, 46):
-        assert lid in links
-        assert links[lid][1] == 14
+    for lid, slot, target in [(22, 4, 15), (23, 5, 15), (45, 2, 23), (46, 3, 23)]:
+        row = links[lid]
+        assert row[1:5] == [34, slot, target, row[4]]
 
 
 def test_extra_metadata():

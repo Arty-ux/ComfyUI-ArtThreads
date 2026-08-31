@@ -1,4 +1,27 @@
-from lib.duration_math import compute
+from lib.duration_math import compute, parse_state
+from lib.timing_plan import make_timing_plan
+
+_TIMING_DEFAULTS = {
+    "sceneStart": 0.0,
+    "warmup": 0.0,
+    "cooldown": 0.0,
+    "ensureMinContext": True,
+    "sourceDuration": 0.0,
+}
+
+
+def _timing_options(state: dict) -> dict:
+    return {
+        "scene_start_seconds": float(state.get("sceneStart", _TIMING_DEFAULTS["sceneStart"])),
+        "warmup_seconds": float(state.get("warmup", _TIMING_DEFAULTS["warmup"])),
+        "cooldown_seconds": float(state.get("cooldown", _TIMING_DEFAULTS["cooldown"])),
+        "ensure_minimum_context": bool(
+            state.get("ensureMinContext", _TIMING_DEFAULTS["ensureMinContext"])
+        ),
+        "source_duration_seconds": float(
+            state.get("sourceDuration", _TIMING_DEFAULTS["sourceDuration"])
+        ),
+    }
 
 
 class ArtThreadsDuration:
@@ -9,14 +32,33 @@ class ArtThreadsDuration:
             "hidden": {"DurationState": ("STRING", {"default": "{}"})},
         }
 
-    RETURN_TYPES = ("INT", "FLOAT")
-    RETURN_NAMES = ("frames", "seconds")
+    RETURN_TYPES = ("INT", "FLOAT", "FLOAT", "FLOAT", "FLOAT", "FLOAT")
+    RETURN_NAMES = (
+        "frames",
+        "seconds",
+        "source_slice_start_seconds",
+        "source_slice_duration_seconds",
+        "final_trim_start_seconds",
+        "final_duration_seconds",
+    )
     FUNCTION = "run"
     CATEGORY = "ArtThreads/Video"
 
     def run(self, DurationState="{}"):
-        frames, seconds = compute(DurationState)
-        return (frames, seconds)
+        state = parse_state(DurationState)
+        frames, actual_seconds = compute(DurationState)
+        plan = make_timing_plan(
+            scene_duration_seconds=float(state["seconds"]),
+            **_timing_options(state),
+        )
+        return (
+            frames,
+            actual_seconds,
+            plan["source_slice_start_seconds"],
+            plan["source_slice_duration_seconds"],
+            plan["final_trim_start_seconds"],
+            plan["final_duration_seconds"],
+        )
 
 
 NODE_CLASS_MAPPINGS = {"ArtThreadsDuration": ArtThreadsDuration}
