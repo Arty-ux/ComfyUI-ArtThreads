@@ -25,6 +25,7 @@ _modules = [
         "duration",
         "load_audio",
         "multi_reference",
+        "prompt_mentions",
         "video_size",
         "longest_side",
         "monitor",

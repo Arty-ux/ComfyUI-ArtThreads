@@ -23,6 +23,7 @@ def test_node_mappings():
         "ArtThreadsDuration",
         "ArtThreadsLoadAudio",
         "ArtThreadsMultiReference",
+        "ArtThreadsPromptMentions",
         "ArtThreadsVideoSize",
         "ArtThreadsLongestSide",
         "ArtThreadsMonitor",

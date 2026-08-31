@@ -124,3 +124,23 @@ def test_extra_metadata():
     assert extra["final_upscale_resolution"] == {"width": 1344, "height": 768}
     assert extra["postprocess"]["method"] == "ArtThreadsLongestSide"
     assert extra["postprocess"]["target_longest_side"] == 1344
+
+
+WORKFLOW_V11 = Path(
+    r"C:\Users\artio\Desktop\Comfy UI workflows\MiniMax H3\MinimaxH3\ArtThreads_MultiReference_AudioSync_v1.1.json"
+)
+
+
+def test_v11_prompt_mentions_replaces_primitive():
+    wf = _load(WORKFLOW_V11)
+    nodes = _node_map(wf)
+    links = _links_by_id(wf)
+    n25 = nodes[25]
+    assert n25["type"] == "ArtThreadsPromptMentions"
+    assert n25["outputs"][0]["name"] == "prompt"
+    assert n25["outputs"][0]["links"] == [40]
+    assert links[40][1:5] == [25, 0, 22, 9]
+    prompt = n25["widgets_values"][0]
+    assert "<Picture 1>" in prompt
+    assert "<Audio 1>" in prompt
+    assert not any(n["type"] == "PrimitiveStringMultiline" for n in wf["nodes"])
