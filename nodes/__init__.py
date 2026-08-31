@@ -24,6 +24,7 @@ _modules = [
     for n in (
         "duration",
         "load_audio",
+        "multi_reference",
         "video_size",
         "longest_side",
         "monitor",

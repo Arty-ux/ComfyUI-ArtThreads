@@ -21,6 +21,7 @@ from lib.monitor_stats import (
 )
 
 _AUDIO_EXTS = (".wav", ".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wma", ".aiff", ".aif")
+_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff")
 
 _NO_STORE = {"Cache-Control": "no-store"}
 
@@ -137,13 +138,12 @@ def _prompt_server():
     return mod.PromptServer
 
 
-@_prompt_server().instance.routes.get("/artthreads/api/load_audio/list")
-async def api_load_audio_list(request):
+def _list_input_files(exts):
     try:
         input_dir = folder_paths.get_input_directory()
         names = []
         for n in os.listdir(input_dir):
-            if not n.lower().endswith(_AUDIO_EXTS):
+            if not n.lower().endswith(exts):
                 continue
             try:
                 if os.path.isfile(os.path.join(input_dir, n)):
@@ -152,6 +152,22 @@ async def api_load_audio_list(request):
                 continue
         names.sort(key=lambda s: s.lower())
     except Exception:
+        return None
+    return names
+
+
+@_prompt_server().instance.routes.get("/artthreads/api/load_audio/list")
+async def api_load_audio_list(request):
+    names = _list_input_files(_AUDIO_EXTS)
+    if names is None:
+        return web.json_response({"files": [], "error": True}, headers=_NO_STORE)
+    return web.json_response({"files": names}, headers=_NO_STORE)
+
+
+@_prompt_server().instance.routes.get("/artthreads/api/multi_reference/list")
+async def api_multi_reference_list(request):
+    names = _list_input_files(_IMAGE_EXTS)
+    if names is None:
         return web.json_response({"files": [], "error": True}, headers=_NO_STORE)
     return web.json_response({"files": names}, headers=_NO_STORE)
 

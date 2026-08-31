@@ -22,6 +22,7 @@ def test_node_mappings():
     expected = {
         "ArtThreadsDuration",
         "ArtThreadsLoadAudio",
+        "ArtThreadsMultiReference",
         "ArtThreadsVideoSize",
         "ArtThreadsLongestSide",
         "ArtThreadsMonitor",
