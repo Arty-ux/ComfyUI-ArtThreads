@@ -8,6 +8,7 @@ import {
   FIXED_AUDIO_CLASS,
   MULTIREF_CLASS,
   LOAD_AUDIO_CLASS,
+  AUTO_AUDIO_CLASS,
   displayLabel,
   officialType,
 } from "./core.mjs";
@@ -20,18 +21,104 @@ function nodeClass(node) {
   return node?.comfyClass || node?.type || "";
 }
 
+/**
+ * Comfy/LiteGraph bypass: NEVER is 2 (classic) or 4 (ComfyUI).
+ * Coerce mode — some builds store it as a string.
+ */
+export function isNodeActive(node) {
+  if (!node) return false;
+  const mode = Number(node.mode ?? 0);
+  if (!Number.isFinite(mode)) return true;
+  return mode !== 2 && mode !== 4;
+}
+
 function findInput(node, name) {
   return (node?.inputs || []).find((i) => i && i.name === name) || null;
+}
+
+function resolveLink(graph, linkId) {
+  if (linkId == null || !graph) return null;
+  let link = graph.links?.[linkId];
+  if (!link && typeof graph.links?.get === "function") {
+    link = graph.links.get(linkId);
+  }
+  if (!link && Array.isArray(graph.links)) {
+    link = graph.links.find((l) => l && (l.id === linkId || l[0] === linkId)) || null;
+  }
+  return link || null;
+}
+
+function linkOriginId(link) {
+  if (!link) return null;
+  if (Array.isArray(link)) return link[1];
+  return link.origin_id ?? link.originId ?? null;
+}
+
+function linkTargetId(link) {
+  if (!link) return null;
+  if (Array.isArray(link)) return link[3];
+  return link.target_id ?? link.targetId ?? null;
+}
+
+function linkTargetSlot(link) {
+  if (!link) return null;
+  if (Array.isArray(link)) return link[4];
+  return link.target_slot ?? link.targetSlot ?? null;
+}
+
+function getNodeById(graph, id) {
+  if (!graph || id == null) return null;
+  const n = graph.getNodeById?.(id);
+  if (n) return n;
+  if (typeof id === "string" && /^\d+$/.test(id)) return graph.getNodeById?.(Number(id)) || null;
+  if (typeof id === "number") return graph.getNodeById?.(String(id)) || null;
+  return null;
 }
 
 function linkedOrigin(node, inputName) {
   const input = findInput(node, inputName);
   if (!input || input.link == null) return null;
   const graph = node.graph || activeGraph();
-  const link = graph?.links?.[input.link];
-  if (!link) return null;
-  const originId = link.origin_id ?? link[1];
-  return graph?.getNodeById?.(originId) || null;
+  const link = resolveLink(graph, input.link);
+  const originId = linkOriginId(link);
+  return getNodeById(graph, originId);
+}
+
+/** Find which node feeds a named input, including Map-style link tables. */
+function linkedOriginBySlot(node, slotIndex) {
+  if (!node || slotIndex == null) return null;
+  const graph = node.graph || activeGraph();
+  const input = node.inputs?.[slotIndex];
+  if (input?.link != null) {
+    const link = resolveLink(graph, input.link);
+    return getNodeById(graph, linkOriginId(link));
+  }
+  // Scan all links for target → this node/slot (Vue / Map fallbacks).
+  const links = graph?.links;
+  if (!links) return null;
+  const visit = (link) => {
+    if (!link) return null;
+    if (linkTargetId(link) != node.id && String(linkTargetId(link)) !== String(node.id)) return null;
+    if (linkTargetSlot(link) !== slotIndex) return null;
+    return getNodeById(graph, linkOriginId(link));
+  };
+  if (typeof links.get === "function" && typeof links.values === "function") {
+    for (const link of links.values()) {
+      const n = visit(link);
+      if (n) return n;
+    }
+  } else if (Array.isArray(links)) {
+    for (const link of links) {
+      const n = visit(link);
+      if (n) return n;
+    }
+  } else {
+    for (const key of Object.keys(links)) {
+      const n = visit(links[key]);
+      if (n) return n;
+    }
+  }
+  return null;
 }
 
 function walkUpstream(node, maxDepth = 8) {
@@ -53,10 +140,9 @@ function findFixedAudioRefs(promptNode) {
   const out = promptNode?.outputs?.[0];
   const links = out?.links || [];
   for (const linkId of links) {
-    const link = graph.links?.[linkId];
+    const link = resolveLink(graph, linkId);
     if (!link) continue;
-    const targetId = link.target_id ?? link[3];
-    const target = graph.getNodeById?.(targetId);
+    const target = getNodeById(graph, linkTargetId(link));
     if (nodeClass(target) === FIXED_AUDIO_CLASS) return target;
   }
 
@@ -85,23 +171,66 @@ function findMultiRef(fixed) {
   return null;
 }
 
+function resolveLoadAudio(origin) {
+  if (!origin) return null;
+  if (nodeClass(origin) === LOAD_AUDIO_CLASS) return origin;
+  for (const n of walkUpstream(origin)) {
+    if (nodeClass(n) === LOAD_AUDIO_CLASS) return n;
+  }
+  return null;
+}
+
+function sourceAudioAsset(graph) {
+  if (!graph) return null;
+  const nodes = graph._nodes || graph.nodes || [];
+  let auto = null;
+  for (const n of nodes) {
+    if (nodeClass(n) === AUTO_AUDIO_CLASS) {
+      auto = n;
+      break;
+    }
+  }
+  if (!auto) return null;
+
+  let origin = linkedOrigin(auto, "source_audio");
+  if (!origin) {
+    const slot = (auto.inputs || []).findIndex((inp) => inp && inp.name === "source_audio");
+    if (slot >= 0) origin = linkedOriginBySlot(auto, slot);
+  }
+  if (!origin) return null;
+
+  const loadNode = resolveLoadAudio(origin);
+  if (!isNodeActive(loadNode || origin)) return null;
+
+  const st = loadNode ? readLoadAudio(loadNode) : null;
+  const file = st?.file || "";
+  const title = (loadNode?.title || "").replace(/^\d+\.\s*/, "").trim();
+  return {
+    id: "source-audio",
+    kind: "Source",
+    ordinal: 0,
+    label: displayLabel("Source", 0),
+    file,
+    title: title || file || "Source Audio",
+    thumb: "",
+    nodeId: loadNode?.id ?? origin.id,
+  };
+}
+
 function audioAssetsFromFixed(fixed) {
   const assets = [];
   if (!fixed) return assets;
   for (let i = 0; i < 3; i += 1) {
-    const origin = linkedOrigin(fixed, `ref_audio_${i}`);
-    if (!origin) continue;
-    let loadNode = null;
-    if (nodeClass(origin) === LOAD_AUDIO_CLASS) {
-      loadNode = origin;
-    } else {
-      for (const n of walkUpstream(origin)) {
-        if (nodeClass(n) === LOAD_AUDIO_CLASS) {
-          loadNode = n;
-          break;
-        }
-      }
+    const inputName = `ref_audio_${i}`;
+    let origin = linkedOrigin(fixed, inputName);
+    if (!origin) {
+      const slot = (fixed.inputs || []).findIndex((inp) => inp && inp.name === inputName);
+      if (slot >= 0) origin = linkedOriginBySlot(fixed, slot);
     }
+    if (!origin) continue;
+    const loadNode = resolveLoadAudio(origin);
+    // Bypassed / muted Load Audio stays wired but is not an active @ ref.
+    if (!isNodeActive(loadNode || origin)) continue;
     const ordinal = i + 1;
     const st = loadNode ? readLoadAudio(loadNode) : null;
     const file = st?.file || "";
@@ -123,8 +252,12 @@ function audioAssetsFromFixed(fixed) {
 function videoAssetsFromFixed(fixed) {
   const assets = [];
   if (!fixed) return assets;
-  const origin = linkedOrigin(fixed, "ref_video_0");
-  if (!origin) return assets;
+  let origin = linkedOrigin(fixed, "ref_video_0");
+  if (!origin) {
+    const slot = (fixed.inputs || []).findIndex((inp) => inp && inp.name === "ref_video_0");
+    if (slot >= 0) origin = linkedOriginBySlot(fixed, slot);
+  }
+  if (!origin || !isNodeActive(origin)) return assets;
   assets.push({
     id: "video-1",
     kind: "Video",
@@ -140,7 +273,7 @@ function videoAssetsFromFixed(fixed) {
 
 function pictureAssetsFromMulti(multi) {
   const assets = [];
-  if (!multi) return assets;
+  if (!multi || !isNodeActive(multi)) return assets;
   const files = readMultiRef(multi).files || [];
   files.forEach((file, idx) => {
     const ordinal = idx + 1;
@@ -163,15 +296,18 @@ function pictureAssetsFromMulti(multi) {
  * @returns {{ assets: object[], fixed: object|null, multi: object|null }}
  */
 export function discoverAssets(promptNode) {
+  const graph = promptNode?.graph || activeGraph();
   const fixed = findFixedAudioRefs(promptNode);
   const multi = findMultiRef(fixed);
   const pictures = pictureAssetsFromMulti(multi);
+  const source = sourceAudioAsset(fixed?.graph || graph);
   const audios = audioAssetsFromFixed(fixed);
   const videos = videoAssetsFromFixed(fixed);
   return {
-    assets: [...pictures, ...audios, ...videos],
+    assets: [...pictures, ...(source ? [source] : []), ...audios, ...videos],
     fixed,
     multi,
+    source,
   };
 }
 
@@ -179,6 +315,14 @@ export function assetKey(list) {
   return (list || [])
     .map((a) => `${a.kind}:${a.ordinal}:${a.file || ""}:${a.nodeId || ""}`)
     .join("|");
+}
+
+export function activeMentionKeys(assets) {
+  const keys = new Set();
+  for (const a of assets || []) {
+    keys.add(`${a.kind}:${a.ordinal}`);
+  }
+  return keys;
 }
 
 export { officialType, displayLabel };

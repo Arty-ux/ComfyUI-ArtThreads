@@ -12,7 +12,7 @@ import {
   syncColumns,
   displayLabel,
 } from "./core.mjs";
-import { discoverAssets, assetKey } from "./discover.mjs";
+import { discoverAssets, assetKey, activeMentionKeys } from "./discover.mjs";
 
 const ROOT = "at-pm-root";
 let _cssDone = false;
@@ -80,6 +80,10 @@ export function injectCSS() {
   }
   .at-pm-chip.audio{ color:#7ec8ff; background:rgba(80,160,255,0.16); }
   .at-pm-chip.video{ color:#ffb86b; background:rgba(255,160,60,0.16); }
+  .at-pm-chip.off{
+    color:#8a8a8a; background:transparent;
+    text-decoration:underline wavy #666; text-underline-offset:2px;
+  }
 
   .at-pm-ac{
     position:fixed; z-index:10950; display:none; background:#1d1d1d; border:1px solid #4a4a4a;
@@ -217,7 +221,8 @@ function paintBackdrop(node) {
   const bd = node._atPmBd;
   const ta = node._atPmTa;
   if (!bd || !ta) return;
-  bd.innerHTML = backdropHTML(ta.value);
+  const keys = activeMentionKeys(node._atPmAssets || []);
+  bd.innerHTML = backdropHTML(ta.value, keys);
   syncColumns(ta, bd);
 }
 
@@ -255,7 +260,7 @@ function renderTray(node, assets) {
     } else {
       const ph = document.createElement("div");
       ph.className = "ph";
-      ph.textContent = a.kind === "Audio" ? "AUD" : a.kind === "Video" ? "VID" : "IMG";
+      ph.textContent = a.kind === "Source" ? "SRC" : a.kind === "Audio" ? "AUD" : a.kind === "Video" ? "VID" : "IMG";
       thumb.appendChild(ph);
     }
     const badge = document.createElement("div");
@@ -310,7 +315,8 @@ function openAC(node, ta, start, query) {
   } else {
     const groups = [
       { key: "Picture", title: "Images" },
-      { key: "Audio", title: "Audio" },
+      { key: "Source", title: "Source Audio" },
+      { key: "Audio", title: "Audio Refs" },
       { key: "Video", title: "Video" },
     ];
     for (const g of groups) {
@@ -324,7 +330,8 @@ function openAC(node, ta, start, query) {
         const idx = flat.length;
         flat.push(a);
         const row = document.createElement("div");
-        row.className = "i" + (a.kind === "Audio" ? " audio" : a.kind === "Video" ? " video" : "") + (idx === 0 ? " sel" : "");
+        const isAud = a.kind === "Audio" || a.kind === "Source";
+        row.className = "i" + (isAud ? " audio" : a.kind === "Video" ? " video" : "") + (idx === 0 ? " sel" : "");
         row.dataset.i = String(idx);
         if (a.thumb) {
           const img = document.createElement("img");
@@ -334,7 +341,7 @@ function openAC(node, ta, start, query) {
         } else {
           const ph = document.createElement("div");
           ph.className = "ph";
-          ph.textContent = a.kind === "Audio" ? "AUD" : "VID";
+          ph.textContent = a.kind === "Source" ? "SRC" : a.kind === "Audio" ? "AUD" : "VID";
           row.appendChild(ph);
         }
         const meta = document.createElement("div");
@@ -428,10 +435,14 @@ function onAcKeydown(e, node, ta) {
 export function refreshAssets(node) {
   const { assets } = discoverAssets(node);
   const key = assetKey(assets);
-  if (node._atPmAssetKey === key) return assets;
+  if (node._atPmAssetKey === key) {
+    paintBackdrop(node);
+    return assets;
+  }
   node._atPmAssetKey = key;
   node._atPmAssets = assets;
   renderTray(node, assets);
+  paintBackdrop(node);
   return assets;
 }
 
@@ -461,7 +472,7 @@ export function buildFace(node) {
 
   const hint = document.createElement("div");
   hint.className = "hint";
-  hint.textContent = "Mentions insert MiniMax tags like <Picture 1> / <Audio 1>. Ordinals follow Fixed 3 Audio Refs wiring.";
+  hint.textContent = "Mentions: <Picture N>, <Audio N>, <Source Audio>. Bypassed Load Audio stays out of the tray.";
   root.appendChild(hint);
 
   node._atPmRoot = root;

@@ -28,9 +28,10 @@ Loads up to **9** ordered MiniMax H3 reference images (mixed sizes kept separate
 
 MiniMax-style prompt editor with `@` autocomplete over wired ArtThreads refs.
 
-- Type `@` to pick **Picture** / **Audio** / **Video** refs from Multi Reference cards and
-  Load Audio nodes connected into **Fixed 3 Audio Refs**
-- Stored tags are canonical MiniMax forms: `<Picture N>`, `<Audio N>`, `<Video N>`
+- Type `@` to pick **Picture** / **Audio** / **Source Audio** / **Video** refs from Multi Reference,
+  Load Audio (Fixed 3 Audio Refs), and Source Audio wired into Auto / Native Audio
+- Stored tags are canonical forms: `<Picture N>`, `<Audio N>`, `<Source Audio>`, `<Video N>`
+- Bypassed Load Audio nodes are omitted from the tray and `@` list
 - Output `prompt` (`STRING`) — wire into the Fixed Audio Refs `prompt` input
 - Replaces a plain `PrimitiveStringMultiline` prompt box in H3 AudioSync workflows
 
