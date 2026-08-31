@@ -20,7 +20,7 @@ def make_timing_plan(
     cooldown_seconds: float = 0.0,
     ensure_minimum_context: bool = True,
     source_duration_seconds: float = 0.0,
-) -> dict[str, float]:
+) -> dict:
     if scene_start_seconds < 0:
         raise ValueError("scene_start_seconds cannot be negative")
     if scene_duration_seconds <= 0:
@@ -39,13 +39,14 @@ def make_timing_plan(
     render_duration = frame_count / FPS
     ideal_end = ideal_start + render_duration
     slice_start = max(0.0, ideal_start)
-    left_pad = max(0.0, -ideal_start)
     available_end = source_duration_seconds if source_duration_seconds > 0 else ideal_end
     slice_end = min(ideal_end, available_end)
     slice_duration = max(0.0, slice_end - slice_start)
     trim_start = scene_start_seconds - ideal_start
 
     return {
+        "frame_count": int(frame_count),
+        "render_duration_seconds": float(render_duration),
         "source_slice_start_seconds": float(slice_start),
         "source_slice_duration_seconds": float(slice_duration),
         "final_trim_start_seconds": float(trim_start),

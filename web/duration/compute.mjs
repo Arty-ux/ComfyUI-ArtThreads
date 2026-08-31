@@ -17,7 +17,52 @@ export const MAX_SECONDS = 100000;
 
 export const DEFAULTS = {
   seconds: 5, fps: 24, step: 17, plus: 5, minFrames: 5, mode: "recipe", formula: "",
+  sceneStart: 0, warmup: 0, cooldown: 0, ensureMinContext: true, sourceDuration: 0,
 };
+
+export const MIN_TRAINED_FRAMES = 124;
+
+/** Same 17n+5 grid as lib/timing_plan.align_frame_count. */
+export function alignFrameCount(frameCount) {
+  frameCount = Math.max(5, Math.trunc(frameCount));
+  return frameCount + ((5 - frameCount) % 17 + 17) % 17;
+}
+
+/**
+ * Browser mirror of lib/timing_plan.make_timing_plan.
+ * H3 length must be this frame_count, not a plain seconds snap.
+ */
+export function makeTimingPlan(state) {
+  const st = { ...DEFAULTS, ...(state || {}) };
+  const sceneStart = num(st.sceneStart, 0, 0, MAX_SECONDS);
+  const sceneDuration = num(st.seconds, DEFAULTS.seconds, 0.01, MAX_SECONDS);
+  const warmup = num(st.warmup, 0, 0, MAX_SECONDS);
+  const cooldown = num(st.cooldown, 0, 0, MAX_SECONDS);
+  const ensureMin = st.ensureMinContext !== false;
+  const sourceDuration = num(st.sourceDuration, 0, 0, MAX_SECONDS);
+  const fps = num(st.fps, DEFAULTS.fps, 0.01, MAX_FPS);
+
+  let required = warmup + sceneDuration + cooldown;
+  if (ensureMin) required = Math.max(required, MIN_TRAINED_FRAMES / fps);
+  const extra = Math.max(0, required - (warmup + sceneDuration + cooldown));
+  let idealStart = sceneStart - warmup - extra / 2;
+  let idealEnd = sceneStart + sceneDuration + cooldown + extra / 2;
+  const frameCount = alignFrameCount(Math.ceil((idealEnd - idealStart) * fps - 1e-9));
+  const renderDuration = frameCount / fps;
+  idealEnd = idealStart + renderDuration;
+  const sliceStart = Math.max(0, idealStart);
+  const availableEnd = sourceDuration > 0 ? sourceDuration : idealEnd;
+  const sliceEnd = Math.min(idealEnd, availableEnd);
+  const trimStart = sceneStart - idealStart;
+  return {
+    frames: frameCount,
+    actual: renderDuration,
+    finalDuration: sceneDuration,
+    trimStart,
+    sliceStart,
+    sliceDuration: Math.max(0, sliceEnd - sliceStart),
+  };
+}
 
 /** Python's %, not JavaScript's: always non-negative for a positive modulus. */
 function mod(value, n) {
@@ -83,14 +128,22 @@ export function framesFromSeconds(seconds, fps, step, plus, minFrames) {
  */
 export function computeLocal(state) {
   const st = { ...DEFAULTS, ...(state || {}) };
+  const custom = String(st.mode || "recipe").toLowerCase() === "custom"
+    && String(st.formula || "").trim() !== "";
+  // Default path matches Python ArtThreadsDuration: T8 timing plan drives
+  // H3 length (min-context pad). Plain snap is only for custom/non-H3 recipes
+  // that turn ensureMinContext off.
+  if (!custom && st.ensureMinContext !== false) {
+    const plan = makeTimingPlan(st);
+    return { frames: plan.frames, actual: plan.actual, custom: false };
+  }
   const seconds = num(st.seconds, DEFAULTS.seconds, -MAX_SECONDS, MAX_SECONDS);
   const fps = num(st.fps, DEFAULTS.fps, 0, MAX_FPS);
   const frames = framesFromSeconds(seconds, fps, st.step, st.plus, st.minFrames);
   return {
     frames,
     actual: fps > 0 ? frames / fps : 0,
-    custom: String(st.mode || "recipe").toLowerCase() === "custom"
-      && String(st.formula || "").trim() !== "",
+    custom,
   };
 }
 

@@ -16,6 +16,11 @@ DEFAULTS = {
     "minFrames": 5,
     "mode": "recipe",
     "formula": "",
+    "sceneStart": 0.0,
+    "warmup": 0.0,
+    "cooldown": 0.0,
+    "ensureMinContext": True,
+    "sourceDuration": 0.0,
 }
 
 

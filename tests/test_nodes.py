@@ -40,10 +40,28 @@ def test_duration_run():
     )
     frames, seconds, slice_start, slice_dur, trim_start, trim_dur = out
     assert frames == 124
-    assert abs(seconds - 124 / 24) < 0.001
+    assert seconds == 5.0
     assert trim_dur == 5.0
     assert slice_start == 0.0
-    assert slice_dur == pytest.approx(mod.make_timing_plan(0, 5.0)["source_slice_duration_seconds"])
+    assert end_ok(frames, trim_start, trim_dur)
+
+
+def end_ok(frame_count, trim_start, trim_dur, fps=24.0):
+    start = round(trim_start * fps)
+    count = max(1, round(trim_dur * fps))
+    return start + count <= frame_count
+
+
+def test_duration_4s_trim_fits_generated_frames():
+    """Regression: plain H3 snap of 4s is 107 frames; trim needs padded context."""
+    mod = _load_module("artthreads_duration_4s", "nodes/duration.py")
+    out = mod.ArtThreadsDuration().run(
+        DurationState='{"seconds":4,"fps":24,"step":17,"plus":5,"minFrames":5,"mode":"recipe"}'
+    )
+    frames, seconds, _ss, _sd, trim_start, trim_dur = out
+    assert seconds == 4.0
+    assert frames >= 124
+    assert end_ok(frames, trim_start, trim_dur)
 
 
 def test_video_size_run():

@@ -1,4 +1,4 @@
-from lib.duration_math import compute, parse_state
+from lib.duration_math import parse_state
 from lib.timing_plan import make_timing_plan
 
 _TIMING_DEFAULTS = {
@@ -45,15 +45,18 @@ class ArtThreadsDuration:
     CATEGORY = "ArtThreads/Video"
 
     def run(self, DurationState="{}"):
+        # H3 length must match the T8 timing plan (min-context pad + grid), not
+        # a plain seconds→frames snap. Otherwise Exact Output Trim asks for
+        # frames beyond what was decoded (e.g. 4s → 107 gen vs trim end 110).
         state = parse_state(DurationState)
-        frames, actual_seconds = compute(DurationState)
+        scene_seconds = float(state["seconds"])
         plan = make_timing_plan(
-            scene_duration_seconds=float(state["seconds"]),
+            scene_duration_seconds=scene_seconds,
             **_timing_options(state),
         )
         return (
-            frames,
-            actual_seconds,
+            plan["frame_count"],
+            scene_seconds,
             plan["source_slice_start_seconds"],
             plan["source_slice_duration_seconds"],
             plan["final_trim_start_seconds"],

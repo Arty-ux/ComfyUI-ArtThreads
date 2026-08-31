@@ -36,6 +36,12 @@ export const DEFAULT_STATE = {
   minFrames: 5,
   mode: "recipe",          // "recipe" | "custom"
   formula: "",
+  // T8 audio-sync timing (same fields MiniMaxH3DurationPlannerT8 used)
+  sceneStart: 0,
+  warmup: 0,
+  cooldown: 0,
+  ensureMinContext: true,
+  sourceDuration: 0,
   // --- how the face behaves (never sent; see injectedState) -----------------
   pick: PICK_CHIPS,
   values: [4, 5, 6, 8, 10, 12, 15],  // H3 chips 4–15s
@@ -48,7 +54,10 @@ export const DEFAULT_STATE = {
 // The keys Python reads. Anything else is presentation, and sending it would
 // change the node's cache signature - so renaming a recipe or editing the chip
 // list you are not using would silently re-run the whole workflow.
-const PROMPT_KEYS = ["seconds", "fps", "step", "plus", "minFrames", "mode", "formula"];
+const PROMPT_KEYS = [
+  "seconds", "fps", "step", "plus", "minFrames", "mode", "formula",
+  "sceneStart", "warmup", "cooldown", "ensureMinContext", "sourceDuration",
+];
 
 function clampNum(value, fallback, lo, hi) {
   const out = typeof value === "number" ? value : parseFloat(value);
@@ -79,6 +88,11 @@ export function readState(node) {
   if (![PICK_CHIPS, PICK_SLIDER, PICK_NUMBER].includes(st.pick)) st.pick = PICK_CHIPS;
   st.mode = String(st.mode || "recipe").toLowerCase() === "custom" ? "custom" : "recipe";
   st.formula = typeof st.formula === "string" ? st.formula : "";
+  st.sceneStart = clampNum(st.sceneStart, DEFAULT_STATE.sceneStart, 0, 100000);
+  st.warmup = clampNum(st.warmup, DEFAULT_STATE.warmup, 0, 100000);
+  st.cooldown = clampNum(st.cooldown, DEFAULT_STATE.cooldown, 0, 100000);
+  st.sourceDuration = clampNum(st.sourceDuration, DEFAULT_STATE.sourceDuration, 0, 100000);
+  st.ensureMinContext = st.ensureMinContext !== false;
   return st;
 }
 

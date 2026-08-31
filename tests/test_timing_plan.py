@@ -12,10 +12,14 @@ def test_default_5s_matches_t8_trim_outputs():
         ensure_minimum_context=True,
         source_duration_seconds=0.0,
     )
+    assert plan["frame_count"] == MIN_TRAINED_FRAMES
     assert plan["final_duration_seconds"] == 5.0
     assert plan["final_trim_start_seconds"] == pytest.approx((MIN_TRAINED_FRAMES / FPS - 5.0) / 2)
     assert plan["source_slice_start_seconds"] == pytest.approx(0.0)
     assert plan["source_slice_duration_seconds"] >= 5.0
+    start = round(plan["final_trim_start_seconds"] * FPS)
+    count = max(1, round(plan["final_duration_seconds"] * FPS))
+    assert start + count <= plan["frame_count"]
 
 
 def test_warmup_shifts_slice_start():

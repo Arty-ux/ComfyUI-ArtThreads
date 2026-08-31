@@ -205,13 +205,22 @@ def check_nodes_optional() -> None:
         from nodes.duration import ArtThreadsDuration
         from nodes.video_size import ArtThreadsVideoSize
 
-        frames, seconds = ArtThreadsDuration().run(
+        out = ArtThreadsDuration().run(
             DurationState='{"seconds":5,"fps":24,"step":17,"plus":5,"minFrames":5,"mode":"recipe"}'
-        )[:2]
-        if frames == 124:
+        )
+        frames, seconds = out[0], out[1]
+        if frames == 124 and seconds == 5.0:
             ok("ArtThreadsDuration.run 5s -> 124 frames")
         else:
-            fail("ArtThreadsDuration.run", f"frames={frames}")
+            fail("ArtThreadsDuration.run", f"frames={frames} seconds={seconds}")
+        out4 = ArtThreadsDuration().run(
+            DurationState='{"seconds":4,"fps":24,"step":17,"plus":5,"minFrames":5,"mode":"recipe"}'
+        )
+        f4, _s4, _a, _b, t0, td = out4
+        if f4 >= 124 and round(t0 * 24) + max(1, round(td * 24)) <= f4:
+            ok("ArtThreadsDuration.run 4s trim fits generated frames")
+        else:
+            fail("ArtThreadsDuration.run 4s trim", f"frames={f4} trim=[{t0}:{td}]")
 
         w, h, img = ArtThreadsVideoSize().run(
             VideoSizeState='{"size":896,"ratio":"16:9","step":32,"anchor":"center","allow_upscale":true,"resample":"auto"}'
