@@ -78,12 +78,11 @@ export function readState(node) {
   if (st.max < st.min) st.max = st.min;
   st.stepSec = clampNum(st.stepSec, DEFAULT_STATE.stepSec, 0.01, 100000);
   if (!Array.isArray(st.values)) st.values = [...DEFAULT_STATE.values];
-  // A chip list is a set of numbers, sorted, deduped, and capped - it is drawn
-  // as one row of buttons, so an accidental 500-entry paste must not make the
-  // node unusable.
+  // A chip list is a set of numbers, sorted and deduped. Drawn as one row of
+  // buttons that shrink together when there are many.
   st.values = [...new Set(st.values
     .map((v) => clampNum(v, NaN, 0, 100000))
-    .filter((v) => Number.isFinite(v)))].sort((a, b) => a - b).slice(0, 12);
+    .filter((v) => Number.isFinite(v)))].sort((a, b) => a - b);
   if (!st.values.length) st.values = [...DEFAULT_STATE.values];
   if (![PICK_CHIPS, PICK_SLIDER, PICK_NUMBER].includes(st.pick)) st.pick = PICK_CHIPS;
   st.mode = String(st.mode || "recipe").toLowerCase() === "custom" ? "custom" : "recipe";

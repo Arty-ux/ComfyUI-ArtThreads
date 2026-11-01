@@ -9,9 +9,9 @@
 import { app } from "/scripts/app.js";
 import { createAccentSection, accentOf } from "../shared/node_settings.mjs";
 import {
-  readState, writeState, snapToMultiple, MAX_ROW_ITEMS, LOCKED_RATIO, STEPS,
+  readState, writeState, snapToMultiple, LOCKED_RATIO, STEPS,
   RATIO_CHOICES, ANCHORS, RESAMPLES, MIN_DIM, MAX_DIM, nodeConfig,
-} from "./core.mjs";
+} from "./core.mjs?v=2";
 
 let PANEL = null;
 let PANEL_NODE = null;
@@ -324,7 +324,8 @@ function fill(bd, node, changed) {
   // ── size tabs ────────────────────────────────────────────────────────────
   // Typed, because a size is any number you like. The grid IS the row you will
   // see, in the order you will see it, and it costs a fraction of the height an
-  // add/remove list would. A blank slot simply drops that tab.
+  // add/remove list would. A blank slot simply drops that tab. One trailing
+  // blank is always kept so another size can be typed in.
   {
     const sec = section(bd, "Size tabs", () => {
       writeState(node, { sizes: [...defaultSizes] });
@@ -332,19 +333,12 @@ function fill(bd, node, changed) {
     });
     const grid = document.createElement("div");
     grid.className = "grid3";
-    for (let i = 0; i < MAX_ROW_ITEMS; i++) {
-      const inp = document.createElement("input");
-      inp.type = "text";
-      inp.value = st.sizes[i] != null ? String(st.sizes[i]) : "";
-      // The last value this slot successfully held, so a typo can be refused
-      // WITHOUT losing the size that was there. Kept on the element rather than
-      // by index, because blank slots make list indices and input indices
-      // drift apart.
-      inp.dataset.good = inp.value;
-      inp.placeholder = "-";
-      inp.title = st.step > 0
-        ? `A size for the row, rounded to the nearest ${st.step}. Blank drops this tab.`
-        : "A size for the row. Blank drops this tab.";
+
+    const sizeTitle = (step) => step > 0
+      ? `A size for the row, rounded to the nearest ${step}. Blank drops this tab.`
+      : "A size for the row. Blank drops this tab.";
+
+    const bindSizeInput = (inp) => {
       inp.addEventListener("change", () => {
         const step = readState(node).step;
         const vals = [];
@@ -375,32 +369,48 @@ function fill(bd, node, changed) {
         const next = vals.length ? vals : [...defaultSizes];
         writeState(node, { sizes: next });
 
-        // changed(FALSE): repaint the node face but do NOT rebuild the panel
-        // body. A rebuild here destroys every other control between the
-        // mousedown and the mouseup of whatever the user clicked next, so
-        // clicking a step pill (or reset, or an anchor cell) right after typing
-        // a size did nothing at all and had to be clicked twice. Nothing else
-        // in this panel depends on the size list, so writing the normalised
-        // values straight back into the fields is enough.
+        // Slot count changed (added or dropped a tab): rebuild so the trailing
+        // blank stays available. Same count: write normalised values back in
+        // place - a full rebuild here destroys the next click (step pill /
+        // reset / anchor) between mousedown and mouseup.
+        const needSlots = next.length + 1;
+        if (needSlots !== inputs.length) {
+          changed(true);
+          return;
+        }
         inputs.forEach((el, i) => {
           if (el.classList.contains("bad")) return;   // leave the typo visible to be corrected
           el.value = next[i] != null ? String(next[i]) : "";
           el.dataset.good = el.value;
-          el.title = step > 0
-            ? `A size for the row, rounded to the nearest ${step}. Blank drops this tab.`
-            : "A size for the row. Blank drops this tab.";
+          el.title = sizeTitle(step);
         });
         changed(false);
       });
+    };
+
+    // Current sizes plus one empty slot for adding another.
+    const slotCount = st.sizes.length + 1;
+    for (let i = 0; i < slotCount; i++) {
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.value = st.sizes[i] != null ? String(st.sizes[i]) : "";
+      // The last value this slot successfully held, so a typo can be refused
+      // WITHOUT losing the size that was there. Kept on the element rather than
+      // by index, because blank slots make list indices and input indices
+      // drift apart.
+      inp.dataset.good = inp.value;
+      inp.placeholder = "-";
+      inp.title = sizeTitle(st.step);
+      bindSizeInput(inp);
       grid.appendChild(inp);
     }
     sec.appendChild(grid);
     const note = document.createElement("div");
     note.className = "note";
     note.textContent = st.step > 0
-      ? `Type any size. Up to ${MAX_ROW_ITEMS} fit on the row, and each is rounded `
+      ? `Type any size. Use the empty slot to add another; each is rounded `
         + `to the nearest ${st.step} to match the step above.`
-      : `Type any size. Up to ${MAX_ROW_ITEMS} fit on the row. Blank drops a tab.`;
+      : "Type any size. Use the empty slot to add another. Blank drops a tab.";
     sec.appendChild(note);
   }
 
@@ -414,7 +424,6 @@ function fill(bd, node, changed) {
     });
 
     const chosen = st.ratios;
-    const full = chosen.length >= MAX_ROW_ITEMS;
 
     const grid = document.createElement("div");
     grid.className = "sugg";
@@ -428,18 +437,15 @@ function fill(bd, node, changed) {
         b.title = "Always on the row. It is the way back from a crop, so it cannot be removed.";
       } else if (on) {
         b.title = `On the row. Click to take ${r} off.`;
-      } else if (full) {
-        b.title = `The row is full (${MAX_ROW_ITEMS}). Take one off to add ${r}.`;
       } else {
         b.title = `Click to put ${r} on the row.`;
       }
       b.addEventListener("click", () => {
         if (locked) return;                       // keep is not removable
         const cur = readState(node).ratios;
-        let next;
-        if (cur.includes(r)) next = cur.filter((x) => x !== r);
-        else if (cur.length >= MAX_ROW_ITEMS) return;   // full, nothing to do
-        else next = [...cur, r];
+        const next = cur.includes(r)
+          ? cur.filter((x) => x !== r)
+          : [...cur, r];
         writeState(node, { ratios: next });
         changed(true);
       });
@@ -449,9 +455,7 @@ function fill(bd, node, changed) {
 
     const note = document.createElement("div");
     note.className = "note";
-    note.textContent = full
-      ? `The row is full. Click one that is on to take it off, then add another.`
-      : `Click to add or remove. Up to ${MAX_ROW_ITEMS} fit, and keep is always there.`;
+    note.textContent = "Click to add or remove. keep is always there.";
     sec.appendChild(note);
   }
 

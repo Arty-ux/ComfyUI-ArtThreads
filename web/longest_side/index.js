@@ -15,10 +15,10 @@ import { isGraphLoading } from "../shared/graph_loading.mjs";
 import { onRendererChange } from "../shared/renderer_switch.mjs";
 import { registerPromptInjector } from "../shared/graph_prompt.mjs";
 import { installNodeAccent, registerNodeSettings } from "../shared/node_settings.mjs";
-import { CLASS_NAMES, NODE_CONFIG, runState, nodeConfig } from "./core.mjs";
-import { inputSizeKey } from "./input_size.mjs";
-import { buildFace, WIDGET_H, VIDEO_SIZE_WIDGET_H, DEFAULT_W, MIN_W } from "./ui.mjs";
-import { openLongestSidePanel, closeLongestSidePanelFor } from "./settings.mjs";
+import { CLASS_NAMES, NODE_CONFIG, runState, nodeConfig } from "./core.mjs?v=2";
+import { inputSizeKey } from "./input_size.mjs?v=2";
+import { buildFace, WIDGET_H, VIDEO_SIZE_WIDGET_H, DEFAULT_W, MIN_W } from "./ui.mjs?v=2";
+import { openLongestSidePanel, closeLongestSidePanelFor } from "./settings.mjs?v=2";
 
 const CLASS_SET = new Set(CLASS_NAMES);
 

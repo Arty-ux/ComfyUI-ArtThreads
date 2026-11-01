@@ -5,7 +5,6 @@ export const CLASS_NAMES = ["ArtThreadsLongestSide", "ArtThreadsVideoSize"];
 export const STEPS = [0, 8, 16, 32, 64];
 export const MIN_DIM = 8;
 export const MAX_DIM = 16384;
-export const MAX_ROW_ITEMS = 5;
 export const LOCKED_RATIO = "keep";
 
 export const ANCHORS = [
@@ -83,15 +82,15 @@ export function readState(node) {
   const d = raw && typeof raw === "object" ? raw : {};
 
   const sizes = Array.isArray(d.sizes) && d.sizes.length
-    ? d.sizes.map((v) => clampInt(v, MIN_DIM, MAX_DIM, 1024)).slice(0, MAX_ROW_ITEMS)
+    ? d.sizes.map((v) => clampInt(v, MIN_DIM, MAX_DIM, 1024))
     : [...cfg.defaultSizes];
 
   const stored = Array.isArray(d.ratios)
     ? d.ratios.filter((r) => typeof r === "string" && r.trim() && r !== LOCKED_RATIO)
     : [...cfg.defaultRatios].filter((r) => r !== LOCKED_RATIO);
   const ratios = cfg.videoSize
-    ? [...new Set([...cfg.defaultRatios.filter((r) => r !== LOCKED_RATIO), ...stored])].slice(0, MAX_ROW_ITEMS)
-    : [LOCKED_RATIO, ...stored].slice(0, MAX_ROW_ITEMS);
+    ? [...new Set([...cfg.defaultRatios.filter((r) => r !== LOCKED_RATIO), ...stored])]
+    : [LOCKED_RATIO, ...stored];
 
   const step = Number(d.step);
   let ratio = typeof d.ratio === "string" && d.ratio.trim() ? d.ratio : cfg.defaults.ratio;

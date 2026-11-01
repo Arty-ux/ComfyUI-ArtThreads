@@ -8,10 +8,10 @@ import { app } from "/scripts/app.js";
 import { createAccentSection, accentOf } from "../shared/node_settings.mjs";
 import {
   PICK_CHIPS, PICK_SLIDER, PICK_NUMBER, readState, writeState, clampToPick,
-} from "./core.mjs";
-import { RECIPES, CUSTOM_NAME, recipePatch, matchRecipe } from "./recipes.mjs";
-import { computeLocal } from "./compute.mjs";
-import { previewCustom } from "./api.mjs";
+} from "./core.mjs?v=2";
+import { RECIPES, CUSTOM_NAME, recipePatch, matchRecipe } from "./recipes.mjs?v=2";
+import { computeLocal } from "./compute.mjs?v=2";
+import { previewCustom } from "./api.mjs?v=2";
 
 let PANEL = null;
 let PANEL_NODE = null;
@@ -359,7 +359,7 @@ function fill(bd, node, changed) {
     allowed.appendChild(input);
     const note = document.createElement("div");
     note.className = "note";
-    note.textContent = "Up to 12 lengths. They are sorted for you.";
+    note.textContent = "Comma-separated lengths in seconds. They are sorted for you.";
     allowed.appendChild(note);
   } else {
     const row = document.createElement("div");

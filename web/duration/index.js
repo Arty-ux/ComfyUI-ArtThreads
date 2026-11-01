@@ -9,9 +9,9 @@ import { isVueNodes } from "../shared/nodes2.mjs";
 import { isGraphLoading } from "../shared/graph_loading.mjs";
 import { registerPromptInjector } from "../shared/graph_prompt.mjs";
 import { registerNodeSettings, repaintAccent } from "../shared/node_settings.mjs";
-import { CLASS, HIDDEN_INPUT, MIN_W, DEFAULT_W, injectedState } from "./core.mjs";
-import { buildFace, renderFace, destroyFace, bodyHeight, injectCSS } from "./ui.mjs";
-import { openDurationPanel, closeDurationPanelFor } from "./settings.mjs";
+import { CLASS, HIDDEN_INPUT, MIN_W, DEFAULT_W, injectedState } from "./core.mjs?v=2";
+import { buildFace, renderFace, destroyFace, bodyHeight, injectCSS } from "./ui.mjs?v=2";
+import { openDurationPanel, closeDurationPanelFor } from "./settings.mjs?v=2";
 
 registerPromptInjector(CLASS, (node, entry) => {
   entry.inputs = entry.inputs || {};

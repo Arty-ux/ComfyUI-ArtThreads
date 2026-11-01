@@ -13,9 +13,9 @@ import { installResizeFloor } from "../shared/resize_floor.mjs";
 import {
   ROW_H, READOUT_H, BODY_PAD, PICK_CHIPS, PICK_SLIDER,
   readState, writeState, clampToPick,
-} from "./core.mjs";
-import { computeLocal } from "./compute.mjs";
-import { previewCustom } from "./api.mjs";
+} from "./core.mjs?v=2";
+import { computeLocal } from "./compute.mjs?v=2";
+import { previewCustom } from "./api.mjs?v=2";
 
 const ROOT_CLASS = "at-dur-root";
 const WIDGET_NAME = "duration_ui";

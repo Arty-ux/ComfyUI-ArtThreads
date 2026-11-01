@@ -14,8 +14,8 @@ import { artGearMask } from "../shared/api_url.mjs";
 import { ACC } from "../shared/node_settings.mjs";
 import {
   readState, writeState, nextStep, stepLabel, previewText, parseRatio, nodeConfig,
-} from "./core.mjs";
-import { resolveInputSize, isInputConnected } from "./input_size.mjs";
+} from "./core.mjs?v=2";
+import { resolveInputSize, isInputConnected } from "./input_size.mjs?v=2";
 
 const PAD = 6;
 const GAP = 4;
