@@ -5,7 +5,9 @@ import { imageFileUrl } from "../multi_reference/api.mjs";
 import { readState as readMultiRef } from "../multi_reference/core.mjs";
 import { readState as readLoadAudio } from "../load_audio/core.mjs";
 import {
-  FIXED_AUDIO_CLASS,
+  REF_TO_IMAGE_CLASS,
+  REF_TO_IMAGE_MAX_QUALITY_CLASS,
+  CONDITIONING_CLASSES,
   MULTIREF_CLASS,
   LOAD_AUDIO_CLASS,
   AUTO_AUDIO_CLASS,
@@ -133,7 +135,12 @@ function walkUpstream(node, maxDepth = 8) {
   return out;
 }
 
-function findFixedAudioRefs(promptNode) {
+function isConditioningClass(cls) {
+  return CONDITIONING_CLASSES.includes(cls);
+}
+
+/** Prefer the conditioning node wired from Prompt Mentions; fall back to graph scan. */
+function findConditioningNode(promptNode) {
   const graph = promptNode?.graph || activeGraph();
   if (!graph) return null;
 
@@ -143,14 +150,24 @@ function findFixedAudioRefs(promptNode) {
     const link = resolveLink(graph, linkId);
     if (!link) continue;
     const target = getNodeById(graph, linkTargetId(link));
-    if (nodeClass(target) === FIXED_AUDIO_CLASS) return target;
+    if (isConditioningClass(nodeClass(target))) return target;
   }
 
   const nodes = graph._nodes || graph.nodes || [];
+  let fallback = null;
   for (const n of nodes) {
-    if (nodeClass(n) === FIXED_AUDIO_CLASS) return n;
+    const cls = nodeClass(n);
+    if (!isConditioningClass(cls)) continue;
+    // Prefer image still conditioning when both exist on the same graph.
+    if (cls === REF_TO_IMAGE_MAX_QUALITY_CLASS || cls === REF_TO_IMAGE_CLASS) return n;
+    if (!fallback) fallback = n;
   }
-  return null;
+  return fallback;
+}
+
+/** @deprecated name kept for local call sites; resolves Fixed Audio or Ref→Image. */
+function findFixedAudioRefs(promptNode) {
+  return findConditioningNode(promptNode);
 }
 
 function findMultiRef(fixed) {

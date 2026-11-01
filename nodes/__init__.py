@@ -30,6 +30,7 @@ _modules = [
         "longest_side",
         "monitor",
         "run_timer",
+        "reference_to_image",
     )
 ]
 

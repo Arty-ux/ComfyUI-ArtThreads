@@ -12,13 +12,14 @@ import {
 import { imageFileUrl, listImageFiles, uploadImage } from "./api.mjs";
 
 const ROOT = "at-mr-root";
-let _cssDone = false;
+const CSS_ID = "at-mr-css-v011";
 let _popup = null;
 let _toastTimer = 0;
 
 export function injectCSS() {
-  if (_cssDone) return;
-  _cssDone = true;
+  // Always (re)write so a cached old style tag cannot stick after an update.
+  document.getElementById("at-mr-css")?.remove();
+  document.getElementById(CSS_ID)?.remove();
   const css = `
   .${ROOT}{
     box-sizing:border-box; width:100%; height:100%; display:flex; flex-direction:column;
@@ -79,14 +80,33 @@ export function injectCSS() {
   .at-mr-pop{
     position:fixed; z-index:10900; background:#232323; border:1px solid #555;
     border-radius:6px; box-shadow:0 10px 30px rgba(0,0,0,0.5); overflow:auto;
-    font-family:'Segoe UI',sans-serif; padding:0.25em 0; max-height:50vh;
+    font-family:'Segoe UI',sans-serif; padding:0.25em 0; max-height:60vh;
   }
   .at-mr-pop .it{
-    padding:0.4em 0.8em; cursor:pointer; font-size:1em; color:#ddd;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    display:flex; align-items:center; gap:0.65em;
+    padding:0.4em 0.75em; cursor:pointer; font-size:1em; color:#ddd;
   }
   .at-mr-pop .it:hover{ background:#2f2f2f; }
   .at-mr-pop .it.on{ color:${ACC}; }
+  .at-mr-pop .it.on .thumb{ border-color:${ACC}; }
+  .at-mr-pop .thumb{
+    flex:none; width:48px; height:48px; border-radius:5px;
+    background:#111; border:1px solid #444; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .at-mr-pop .thumb img{
+    display:block; width:100%; height:100%; object-fit:cover;
+  }
+  .at-mr-pop .thumb.miss{ color:#666; font-size:0.75em; }
+  .at-mr-pop .meta{
+    min-width:0; flex:1; display:flex; flex-direction:column; gap:0.15em;
+  }
+  .at-mr-pop .name{
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.25;
+  }
+  .at-mr-pop .sub{
+    color:#888; font-size:0.85em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
   .at-mr-pop .em{ padding:0.5em 0.8em; font-size:0.92em; color:#888; }
 
   .at-mr-toast{
@@ -97,6 +117,7 @@ export function injectCSS() {
   }
   `;
   const el = document.createElement("style");
+  el.id = CSS_ID;
   el.textContent = css;
   document.head.appendChild(el);
 }
@@ -137,6 +158,51 @@ function cardLayout(nw, nh, previewH = CARD_PREVIEW_H) {
   return { width, height, aspectRatio: `${w} / ${h}` };
 }
 
+function folderPickerLabel(path) {
+  const norm = String(path || "").replace(/\\/g, "/");
+  const parts = norm.split("/").filter(Boolean);
+  const file = parts.pop() || norm;
+  const folder = parts.join("/");
+  return { file, folder };
+}
+
+function buildFolderPickerItem(name, selected) {
+  const it = document.createElement("div");
+  it.className = "it" + (selected ? " on" : "");
+  it.title = name;
+
+  const thumb = document.createElement("div");
+  thumb.className = "thumb";
+  const img = document.createElement("img");
+  img.decoding = "async";
+  img.loading = "lazy";
+  img.alt = "";
+  img.src = imageFileUrl(name);
+  img.addEventListener("error", () => {
+    thumb.textContent = "";
+    thumb.classList.add("miss");
+    thumb.textContent = "?";
+  });
+  thumb.appendChild(img);
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const { file, folder } = folderPickerLabel(name);
+  const nameEl = document.createElement("div");
+  nameEl.className = "name";
+  nameEl.textContent = file;
+  meta.appendChild(nameEl);
+  if (folder) {
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    sub.textContent = folder;
+    meta.appendChild(sub);
+  }
+
+  it.append(thumb, meta);
+  return it;
+}
+
 async function openFolderPicker(node, anchor, onPick) {
   closePopup();
   const pop = document.createElement("div");
@@ -147,7 +213,7 @@ async function openFolderPicker(node, anchor, onPick) {
   pop.appendChild(loading);
   document.body.appendChild(pop);
   _popup = pop;
-  placeZoomedPopup(pop, anchor, { baseFontPx: 12, minWidthPx: 180, baseMaxHeightPx: 320 });
+  placeZoomedPopup(pop, anchor, { baseFontPx: 12, minWidthPx: 280, baseMaxHeightPx: 420 });
   document.addEventListener("pointerdown", onOutside, true);
   document.addEventListener("wheel", onWheel, true);
   document.addEventListener("keydown", onEsc, true);
@@ -165,15 +231,12 @@ async function openFolderPicker(node, anchor, onPick) {
   } else {
     const selected = new Set(readState(node).files);
     for (const name of files) {
-      const it = document.createElement("div");
-      it.className = "it" + (selected.has(name) ? " on" : "");
-      it.textContent = name;
-      it.title = name;
+      const it = buildFolderPickerItem(name, selected.has(name));
       it.addEventListener("click", () => { closePopup(); onPick(name); });
       pop.appendChild(it);
     }
   }
-  placeZoomedPopup(pop, anchor, { baseFontPx: 12, minWidthPx: 180, baseMaxHeightPx: 320 });
+  placeZoomedPopup(pop, anchor, { baseFontPx: 12, minWidthPx: 280, baseMaxHeightPx: 420 });
 }
 
 function isImageFile(file) {

@@ -74,3 +74,47 @@ def changed_token(files) -> str:
         except OSError:
             parts.append(f"{name}:missing")
     return "|".join(parts)
+
+
+def bundle_to_stock_ref_images(ref_images):
+    """Convert ARTTHREADS_H3_REFERENCE_IMAGES tuple/list → stock {ref_image_i: tensor}."""
+    if ref_images is None:
+        return None
+    if not isinstance(ref_images, (tuple, list)):
+        raise TypeError(
+            "[ArtThreads] ref_images must come from Multi Reference ArtThreads "
+            f"(got {type(ref_images).__name__})."
+        )
+    count = len(ref_images)
+    if count == 0:
+        raise ValueError("[ArtThreads] The connected reference-image bundle is empty.")
+    if count > MAX_REFERENCE_IMAGES:
+        raise ValueError(
+            f"[ArtThreads] MiniMax H3 supports at most {MAX_REFERENCE_IMAGES} "
+            f"reference images, but {count} were connected."
+        )
+    stock_inputs = {}
+    for index, image in enumerate(ref_images):
+        try:
+            import torch
+
+            is_tensor = isinstance(image, torch.Tensor)
+        except Exception:
+            is_tensor = False
+        if not is_tensor:
+            raise TypeError(
+                f"[ArtThreads] Reference image {index + 1} is not an IMAGE tensor."
+            )
+        if (
+            image.ndim != 4
+            or image.shape[0] != 1
+            or image.shape[1] <= 0
+            or image.shape[2] <= 0
+            or image.shape[3] < 3
+        ):
+            raise ValueError(
+                f"[ArtThreads] Reference image {index + 1} must have shape "
+                f"[1, H, W, C>=3], but got {tuple(image.shape)}."
+            )
+        stock_inputs[f"ref_image_{index}"] = image
+    return stock_inputs

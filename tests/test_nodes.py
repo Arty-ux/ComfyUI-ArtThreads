@@ -28,9 +28,19 @@ def test_node_mappings():
         "ArtThreadsLongestSide",
         "ArtThreadsMonitor",
         "ArtThreadsRunTimer",
+        "ArtThreadsMiniMaxH3ReferenceToImage",
+        "ArtThreadsMiniMaxH3ReferenceToImageMaxQuality",
     }
     assert expected == set(NODE_CLASS_MAPPINGS)
     assert expected == set(NODE_DISPLAY_NAME_MAPPINGS)
+    assert (
+        NODE_DISPLAY_NAME_MAPPINGS["ArtThreadsMiniMaxH3ReferenceToImage"]
+        == "Reference to Image ArtThreads"
+    )
+    assert (
+        NODE_DISPLAY_NAME_MAPPINGS["ArtThreadsMiniMaxH3ReferenceToImageMaxQuality"]
+        == "Reference to Image Max Quality ArtThreads"
+    )
 
 
 def test_duration_run():

@@ -2,9 +2,18 @@
 
 export const CLASS = "ArtThreadsPromptMentions";
 export const FIXED_AUDIO_CLASS = "DenoMiniMaxH3ReferenceToVideoFixedAudioRefs";
+export const REF_TO_IMAGE_CLASS = "ArtThreadsMiniMaxH3ReferenceToImage";
+export const REF_TO_IMAGE_MAX_QUALITY_CLASS = "ArtThreadsMiniMaxH3ReferenceToImageMaxQuality";
 export const MULTIREF_CLASS = "ArtThreadsMultiReference";
 export const LOAD_AUDIO_CLASS = "ArtThreadsLoadAudio";
 export const AUTO_AUDIO_CLASS = "H3AutoAudioControl";
+
+/** Conditioning nodes that accept ArtThreads Multi Reference + prompt mentions. */
+export const CONDITIONING_CLASSES = [
+  FIXED_AUDIO_CLASS,
+  REF_TO_IMAGE_CLASS,
+  REF_TO_IMAGE_MAX_QUALITY_CLASS,
+];
 
 export const MIN_W = 360;
 export const DEFAULT_W = 500;

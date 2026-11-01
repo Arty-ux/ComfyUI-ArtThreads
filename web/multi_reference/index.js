@@ -20,7 +20,8 @@ import {
   WIDGET_MIN_H,
   injectedState,
 } from "./core.mjs";
-import { buildFace, renderFace, destroyFace, injectCSS } from "./ui.mjs";
+// ?v= busts browser cache: ComfyUI only sends Cache-Control:no-store for .js/.css, not .mjs
+import { buildFace, renderFace, destroyFace, injectCSS } from "./ui.mjs?v=0.1.1";
 
 registerPromptInjector(CLASS, (node, entry) => {
   entry.inputs = entry.inputs || {};

@@ -2,7 +2,7 @@ import { app } from "/scripts/app.js";
 import { isVueNodes } from "./nodes2.mjs";
 import { notifyGraphChanged } from "./graph_changed.mjs";
 
-export const ARTTHREADS_JS_VERSION = "0.1.0";
+export const ARTTHREADS_JS_VERSION = "0.1.1";
 
 export const BRAND = "#5b8def";
 export const ACCENT_VAR = "--at-acc";

@@ -92,3 +92,47 @@ def test_multi_reference_in_mappings():
     pkg = _load_module("artthreads_nodes_mr", "nodes/__init__.py")
     assert "ArtThreadsMultiReference" in pkg.NODE_CLASS_MAPPINGS
     assert pkg.NODE_DISPLAY_NAME_MAPPINGS["ArtThreadsMultiReference"] == "Multi Reference ArtThreads"
+
+
+def test_bundle_to_stock_ref_images():
+    pytest.importorskip("torch")
+    import torch
+
+    mod = _load_module("artthreads_mr_stock", "lib/multi_reference.py")
+    t0 = torch.zeros(1, 8, 12, 3)
+    t1 = torch.ones(1, 16, 10, 3)
+    stock = mod.bundle_to_stock_ref_images((t0, t1))
+    assert list(stock.keys()) == ["ref_image_0", "ref_image_1"]
+    assert stock["ref_image_0"] is t0
+    assert stock["ref_image_1"] is t1
+
+    with pytest.raises(ValueError, match="empty"):
+        mod.bundle_to_stock_ref_images(())
+    with pytest.raises(TypeError, match="Multi Reference"):
+        mod.bundle_to_stock_ref_images("nope")
+    with pytest.raises(ValueError, match="at most 9"):
+        mod.bundle_to_stock_ref_images(tuple(torch.zeros(1, 4, 4, 3) for _ in range(10)))
+
+
+def test_reference_to_image_constants_and_mapping():
+    pytest.importorskip("torch")
+    node_mod = _load_module("artthreads_ref2img", "nodes/reference_to_image.py")
+    assert node_mod.STILL_LENGTH == 5
+    assert node_mod.MAX_QUALITY_LENGTH == 22
+    assert node_mod.RECOMMENDED_STILL_FRAME == 1
+    assert "ArtThreadsMiniMaxH3ReferenceToImage" in node_mod.NODE_CLASS_MAPPINGS
+    assert "ArtThreadsMiniMaxH3ReferenceToImageMaxQuality" in node_mod.NODE_CLASS_MAPPINGS
+    assert (
+        node_mod.NODE_DISPLAY_NAME_MAPPINGS["ArtThreadsMiniMaxH3ReferenceToImage"]
+        == "Reference to Image ArtThreads"
+    )
+    assert (
+        node_mod.NODE_DISPLAY_NAME_MAPPINGS["ArtThreadsMiniMaxH3ReferenceToImageMaxQuality"]
+        == "Reference to Image Max Quality ArtThreads"
+    )
+    types = node_mod.ArtThreadsMiniMaxH3ReferenceToImage.INPUT_TYPES()
+    assert "artthreads_ref_images" in types["required"]
+    assert "length" not in types["required"]
+    hq = node_mod.ArtThreadsMiniMaxH3ReferenceToImageMaxQuality.INPUT_TYPES()
+    assert "still_frame_index" in hq["required"]
+    assert "ref_image_size" not in hq["required"]
