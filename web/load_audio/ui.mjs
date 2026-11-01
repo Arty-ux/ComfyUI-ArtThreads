@@ -226,25 +226,52 @@ function upstreamSeconds(node) {
   return Number.isFinite(v) && v > 0 ? v : null;
 }
 
-/** The length of the window the face should DRAW, in seconds. */
+/** Live/cached seconds from the wire, or null if unwired / unknown. */
+function wiredOutputLen(node) {
+  if (!durationWired(node)) return null;
+  const live = upstreamSeconds(node);
+  if (live != null) return live;
+  const ran = node?._atLaRun?.wired ? node._atLaRun.length : null;
+  return ran != null && ran > 0 ? ran : null;
+}
+
+/**
+ * Video shorter than the audio file: the selection length is locked to the
+ * wire (you place a video-length window on the waveform). Video longer than
+ * or equal to the file: free trim of the whole file, pad up to the wire.
+ */
+function isWireLocked(node, duration) {
+  const w = wiredOutputLen(node);
+  return w != null && duration > 0 && w < duration - 0.01;
+}
+
+/**
+ * Source clip length drawn on the waveform.
+ * Locked-to-video when the wire is shorter than the file; otherwise the
+ * user's trim (or whole file from start).
+ */
 function windowSeconds(node, st, duration) {
-  // Read the LINK, not the last run: the wire is true the moment it is drawn,
-  // whereas _atLaRun only exists after an execution. (_atLaRun stays
-  // runtime-only on purpose - writing a run result to node.properties would
-  // flag a clean workflow modified on every execution, Vue Compat #18.)
-  if (durationWired(node)) {
-    // Live upstream value first: it is current, where the run cache can belong
-    // to a wire that has since been moved.
-    const live = upstreamSeconds(node);
-    if (live != null) return live;
-    const ran = node?._atLaRun?.wired ? node._atLaRun.length : null;
-    if (ran != null && ran > 0) return ran;
-    // Wired to something that cannot tell us in advance: the typed length is a
-    // better stand-in than the whole file, and the readout says it is a guess.
-    return st.length > 0 ? st.length : Math.max(0, duration - st.start);
+  if (isWireLocked(node, duration)) {
+    return Math.min(wiredOutputLen(node), duration);
   }
   if (st.whenUnwired === "length" && st.length > 0) return st.length;
   return Math.max(0, duration - st.start);
+}
+
+/** Output length in seconds: wire if connected, else the source window. */
+function outputSeconds(node, st, duration) {
+  const w = wiredOutputLen(node);
+  if (w != null) return w;
+  return windowSeconds(node, st, duration);
+}
+
+/** Keep start inside the file when a locked video-length window would overrun. */
+function clampLockStart(node, duration) {
+  if (!isWireLocked(node, duration)) return;
+  const st = readState(node);
+  const len = windowSeconds(node, st, duration);
+  const maxStart = Math.max(0, duration - len);
+  if (st.start > maxStart + 0.005) writeState(node, { start: round2(maxStart) });
 }
 
 /**
@@ -338,8 +365,8 @@ export function buildFace(node, openPanel) {
   wavebox.className = "wavebox";
   const wave = document.createElement("canvas");
   wave.className = "wave";
-  wave.title = "Click anywhere to put the play cursor there. Drag either orange "
-    + "edge to trim, or drag the middle to slide the selection.";
+  wave.title = "Click anywhere to put the play cursor there. Drag either white "
+    + "handle to trim, or drag the middle to slide the selection.";
   const times = document.createElement("div");
   times.className = "times";
   const tA = document.createElement("span");
@@ -445,7 +472,9 @@ function attachSettings(node, el, openPanel) {
 // How close to an edge counts as grabbing its handle, in CSS pixels. Generous
 // on purpose: the first version had no handles at all and the window jumped so
 // its CENTRE landed under the cursor, which reads as the drag lagging behind.
-const HANDLE_PX = 8;
+// 12px also covers the drawn white stick when the end sits on the canvas edge
+// (the stick is inset a few px, so an 8px hit box often missed it).
+const HANDLE_PX = 12;
 const MIN_WINDOW_S = 0.1;
 
 /** Which part of the selection is under this x? */
@@ -458,27 +487,33 @@ function zoneAt(node, wave, clientX) {
   const x0 = (st.start / dur) * r.width;
   const x1 = (Math.min(dur, st.start + len) / dur) * r.width;
   const x = clientX - r.left;
+  const d0 = Math.abs(x - x0);
+  const d1 = Math.abs(x - x1);
   let zone;
-  if (Math.abs(x - x0) <= HANDLE_PX) zone = "start";
-  else if (!durationWired(node) && Math.abs(x - x1) <= HANDLE_PX) zone = "end";
+  // Closer edge wins when both handles fall in range (tiny windows).
+  if (d0 <= HANDLE_PX || d1 <= HANDLE_PX) zone = d1 < d0 ? "end" : "start";
   else if (x > x0 && x < x1) zone = "move";
   else zone = "jump";
   return { zone, r, dur, st, len, x };
 }
 
 /**
- * Drag the edges to trim, drag the middle to slide, click outside to jump.
+ * Drag left/right edges to trim, drag the middle to slide, click outside to
+ * place the play cursor (drag outside to jump-slide).
  *
- * The END edge only moves when the duration input is UNWIRED - with a wire the
- * length belongs to whatever is upstream, and letting the mouse fight it would
- * silently disagree with the number actually used at run time.
+ * When the seconds wire is SHORTER than the file (video < audio), length is
+ * locked to the wire: every handle slides that fixed window along the file.
+ * When the wire is longer than or equal to the file (or nothing is wired),
+ * edges freely resize and the middle slides the trimmed block.
  */
 function attachDrag(node, wave) {
-  // Cursor feedback, so the handles are discoverable without a tooltip.
   wave.addEventListener("pointermove", (e) => {
     if (node._atLaDragging) return;
+    const dur = node._atLaDur || 0;
+    const locked = isWireLocked(node, dur);
     const { zone } = zoneAt(node, wave, e.clientX);
     wave.style.cursor = !zone ? "default"
+      : locked ? (zone === "jump" ? "pointer" : "grab")
       : (zone === "start" || zone === "end") ? "ew-resize"
       : zone === "move" ? "grab" : "pointer";
   });
@@ -497,37 +532,26 @@ function attachDrag(node, wave) {
     e.preventDefault();
     try { wave.setPointerCapture(e.pointerId); } catch (_x) { /* mouse only */ }
     node._atLaDragging = true;
-    wave.style.cursor = info.zone === "move" ? "grabbing" : "ew-resize";
 
     const { dur } = info;
+    const locked = isWireLocked(node, dur);
+    wave.style.cursor = locked || info.zone === "move" ? "grabbing" : "ew-resize";
+
     const st0 = readState(node);
     const len0 = windowSeconds(node, st0, dur);
     const end0 = Math.min(dur, st0.start + len0);
+    // Fixed length for slide / locked-to-video. Capture at pointerdown so
+    // "whole file from here" does not keep the right edge glued to EOF.
+    const slideLen = Math.max(MIN_WINDOW_S, Math.min(len0, end0 - st0.start, dur));
+    const maxStart = Math.max(0, dur - slideLen);
+    // Free-trim mode while wired to a longer video: selection may grow up to
+    // the whole file, never past the wire (wire already >= file here).
+    const maxLen = locked ? slideLen : Math.max(MIN_WINDOW_S, dur - st0.start);
     const rect = () => wave.getBoundingClientRect();
     const secAt = (cx) => {
       const r = rect();
       return r.width ? Math.max(0, Math.min(dur, ((cx - r.left) / r.width) * dur)) : 0;
     };
-    // Where inside the window the grab happened, so the window follows the
-    // cursor from THAT point instead of snapping its centre to it.
-    // How far right the START may go. This has been wrong twice, in opposite
-    // directions, so both cases are spelled out.
-    //
-    // `dur - len0` is only right when the length is FIXED. In "whole file from
-    // here" mode the window's end IS the file end, so its length shrinks as the
-    // start moves right - and `dur - len0` then evaluates to exactly the
-    // current start, pinning the selection where it already is. Measured: slide
-    // right once and it never moves right again.
-    //
-    // And when a FIXED length is longer than the file, `dur - len0` goes
-    // negative and clamps to zero, which pins it at the very start instead.
-    //
-    // Both are the same failure to the user: a control that silently stops
-    // responding, which reads as a broken one rather than a limit.
-    const fixedLength = durationWired(node) || st0.whenUnwired === "length";
-    const maxStart = (!fixedLength || len0 >= dur)
-      ? Math.max(0, dur - MIN_WINDOW_S)
-      : dur - len0;
 
     const grabOffset = secAt(e.clientX) - st0.start;
     const downX = e.clientX;
@@ -538,31 +562,41 @@ function attachDrag(node, wave) {
     let moved = false;
     let zone = info.zone;
     let jumpOffset = grabOffset;
+    const writeSlide = (start) => {
+      writeState(node, {
+        start: round2(Math.max(0, Math.min(maxStart, start))),
+        length: round2(slideLen),
+        whenUnwired: "length",
+      });
+    };
     const beginJumpDrag = (cx) => {
-      const start = Math.max(0, Math.min(maxStart, secAt(cx) - len0 / 2));
-      writeState(node, { start: round2(start) });
+      writeSlide(secAt(cx) - slideLen / 2);
       zone = "move";
       jumpOffset = secAt(cx) - readState(node).start;
     };
 
     const apply = (cx) => {
       const t = secAt(cx);
-      if (zone === "start") {
-        if (durationWired(node)) {
-          // Length is fixed by the wire, so the left edge SLIDES the window.
-          writeState(node, { start: round2(Math.max(0, Math.min(maxStart, t))) });
-        } else {
-          const start = Math.max(0, Math.min(end0 - MIN_WINDOW_S, t));
-          writeState(node, { start: round2(start), length: round2(end0 - start),
-                             whenUnwired: "length" });
-        }
+      if (locked) {
+        // Length = video. Left edge, right edge and middle all SLIDE the window.
+        if (zone === "end") writeSlide(t - slideLen);
+        else if (zone === "start") writeSlide(t);
+        else writeSlide(t - jumpOffset);
+      } else if (zone === "start") {
+        // Keep the right edge where it was; only the left edge moves.
+        const start = Math.max(0, Math.min(end0 - MIN_WINDOW_S, t));
+        writeState(node, {
+          start: round2(start),
+          length: round2(end0 - start),
+          whenUnwired: "length",
+        });
       } else if (zone === "end") {
+        // Keep the left edge where it was; only the right edge moves.
         const cur = readState(node);
-        const len = Math.max(MIN_WINDOW_S, Math.min(dur - cur.start, t - cur.start));
+        const len = Math.max(MIN_WINDOW_S, Math.min(maxLen, dur - cur.start, t - cur.start));
         writeState(node, { length: round2(len), whenUnwired: "length" });
       } else {
-        const start = Math.max(0, Math.min(maxStart, t - jumpOffset));
-        writeState(node, { start: round2(start) });
+        writeSlide(t - jumpOffset);
       }
       // IN PLACE, never renderFace: that re-runs the decode promise and repaints
       // twice per pointermove, which is what made the drag feel like it was
@@ -735,6 +769,7 @@ function paint(node, peaks, dur, error) {
   // element, so an isConnected gate silently skips it. destroyFace nulls _els,
   // which is the real protection against painting into a dead widget.
   if (!els) return;
+  clampLockStart(node, dur);
   const st = readState(node);
   node._atLaDur = dur;
 
@@ -762,20 +797,21 @@ function paint(node, peaks, dur, error) {
   // where, when Upload was sitting right there unread.
   else if (!st.file) text = "click Upload, or choose a file above";
   else {
-    // Name where the length came from. A number you did not work out yourself
-    // should say so, and say when it is only a guess.
-    let src;
-    if (durationWired(node)) {
-      src = upstreamSeconds(node) != null ? "length from the wire"
-        : (node._atLaRun?.wired ? "length from the last run" : "length not known until you run");
-    } else {
-      src = st.whenUnwired === "length" ? "length from settings" : "whole file from here";
-    }
-    text = `taking ${len.toFixed(2)}s · ${src}`;
-    if (dur > 0 && st.start + len > dur + 0.01) {
+    const take = Math.max(0, Math.min(len, Math.max(0, dur - st.start)));
+    const out = outputSeconds(node, st, dur);
+    if (isWireLocked(node, dur)) {
+      text = `${take.toFixed(2)}s locked to video · drag to place on the file`;
+    } else if (durationWired(node) && out > take + 0.01) {
+      text = `${take.toFixed(2)}s from file → ${out.toFixed(2)}s out · `
+        + (st.whenShort === "loop" ? "will loop" : "will pad with silence");
+      cls = "warn";
+    } else if (dur > 0 && st.start + len > dur + 0.01) {
       text = `${len.toFixed(2)}s wanted, file ends first · `
         + (st.whenShort === "loop" ? "will loop" : "will pad with silence");
       cls = "warn";
+    } else {
+      const src = st.whenUnwired === "length" ? "trimmed selection" : "whole file from here";
+      text = `taking ${take.toFixed(2)}s · ${src}`;
     }
   }
   els.tx.textContent = text;

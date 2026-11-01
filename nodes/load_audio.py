@@ -126,6 +126,30 @@ class ArtThreadsLoadAudio:
                 f"is at or past the end of {os.path.basename(path)!r} ({have_s:.2f}s)."
             )
 
+        # Free-trim mode only when the wired output is longer than (or equal
+        # to) the file: the waveform selection is the SOURCE region, and a
+        # shorter explicit length is taken then padded up to `want`. When the
+        # wire is shorter than the file, length is locked to the wire and the
+        # user's start just places that window - do not cap take by a stale
+        # shorter length left over from a previous free-trim.
+        if (
+            seconds is not None
+            and st.get("whenUnwired") == "length"
+            and want >= have_s - 0.01
+        ):
+            try:
+                src_s = float(st.get("length") or 0.0)
+            except (TypeError, ValueError):
+                src_s = 0.0
+            if src_s == src_s and src_s > 0:
+                max_take = int(round(src_s * float(sample_rate or 1)))
+                if max_take < plan["take"]:
+                    plan = {
+                        **plan,
+                        "take": max(0, max_take),
+                        "fill": plan["want"] - max(0, max_take),
+                    }
+
         when_short = "loop" if st.get("whenShort") == "loop" else "silence"
         out = apply_window(waveform, plan, when_short)
         rep = window_report(plan, sample_rate)

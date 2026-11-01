@@ -12,7 +12,8 @@ import { isGraphLoading } from "../shared/graph_loading.mjs";
 import { registerPromptInjector, collectNodesByClass } from "../shared/graph_prompt.mjs";
 import { installNodeAccent, registerNodeSettings, repaintAccent } from "../shared/node_settings.mjs";
 import { CLASS, HIDDEN_INPUT, MIN_W, DEFAULT_W, injectedState, readState, writeState } from "./core.mjs";
-import { buildFace, renderFace, destroyFace, injectCSS, stopPlay, repaintWave } from "./ui.mjs";
+// ?v= busts Electron's sticky .mjs cache (server only no-stores .js/.css).
+import { buildFace, renderFace, destroyFace, injectCSS, stopPlay, repaintWave } from "./ui.mjs?v=trim4";
 import { openLoadAudioPanel, closeLoadAudioPanelFor } from "./settings.mjs";
 
 const WIDGET_MIN_H = 190;

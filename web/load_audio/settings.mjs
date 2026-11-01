@@ -243,7 +243,7 @@ function fill(bd, node, changed) {
 
   const note = document.createElement("div");
   note.className = "note";
-  note.textContent = "Ignored while the duration dot is connected: the wire always wins.";
+  note.textContent = "If seconds (video length) is shorter than the file, the selection locks to that length and you only place it on the waveform. If the video is longer than the file, you can freely trim; output is padded or looped up to the wire.";
   unwired.appendChild(note);
   bd.appendChild(unwired);
 
