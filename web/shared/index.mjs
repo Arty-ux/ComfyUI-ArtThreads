@@ -20,7 +20,7 @@ export { notifyGraphChanged, installArtThreadsChangeNet } from "./graph_changed.
 
 export { installCanvasZoomPassthrough } from "./canvas_zoom.mjs";
 
-export { placeZoomedPopup, applyPopupZoom, popupZoom } from "./popup_zoom.mjs";
+export { placeZoomedPopup, placeZoomedPopupAt, applyPopupZoom, popupZoom } from "./popup_zoom.mjs";
 
 export { installResizeFloor, measureRootContent } from "./resize_floor.mjs";
 

@@ -4,6 +4,7 @@ export const CLASS = "ArtThreadsPromptMentions";
 export const FIXED_AUDIO_CLASS = "DenoMiniMaxH3ReferenceToVideoFixedAudioRefs";
 export const REF_TO_IMAGE_CLASS = "ArtThreadsMiniMaxH3ReferenceToImage";
 export const REF_TO_IMAGE_MAX_QUALITY_CLASS = "ArtThreadsMiniMaxH3ReferenceToImageMaxQuality";
+export const LTX_UNPACK_CLASS = "ArtThreadsLTXUnpackReferences";
 export const MULTIREF_CLASS = "ArtThreadsMultiReference";
 export const LOAD_AUDIO_CLASS = "ArtThreadsLoadAudio";
 export const AUTO_AUDIO_CLASS = "H3AutoAudioControl";
@@ -15,11 +16,23 @@ export const CONDITIONING_CLASSES = [
   REF_TO_IMAGE_MAX_QUALITY_CLASS,
 ];
 
+/** Nodes that expose Multi Reference via artthreads_ref_images (H3 cond or LTX unpack). */
+export const MULTIREF_BRIDGE_CLASSES = [
+  ...CONDITIONING_CLASSES,
+  LTX_UNPACK_CLASS,
+];
+
 export const MIN_W = 360;
 export const DEFAULT_W = 500;
 export const MIN_H = 280;
 export const DEFAULT_H = 420;
 export const WIDGET_MIN_H = 240;
+
+/** LiteGraph chrome — same green slot as the stock "green" node colour. */
+export const NODE_COLOR = "#232";
+export const NODE_BGCOLOR = "#353";
+/** UI accent (borders / focus) matching mention chips. */
+export const DEFAULT_ACCENT = "#7cbf3a";
 
 export const SOURCE_TAG = "<Source Audio>";
 export const AT_PARTIAL_RE = /@\s*([A-Za-z]*)\s*(\d*)$/;
@@ -88,6 +101,16 @@ export function scanMentions(text) {
   return out;
 }
 
+/** Mention covering caret/click offset, or null. End is exclusive. */
+export function mentionAt(text, pos) {
+  const p = Number(pos);
+  if (!Number.isFinite(p)) return null;
+  for (const m of scanMentions(text)) {
+    if (p >= m.start && p < m.end) return m;
+  }
+  return null;
+}
+
 export function escapeHTML(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -96,8 +119,8 @@ export function escapeHTML(s) {
 }
 
 /**
- * @param {string} text
- * @param {Set<string>|null} activeKeys - keys like "Audio:2"; missing = inactive chip
+ * Highlight HTML for the backdrop layer.
+ * Chip spans must not add layout (no padding/margin/border) or the caret drifts.
  */
 export function backdropHTML(text, activeKeys = null) {
   if (typeof text !== "string") text = "";
@@ -141,20 +164,4 @@ export function filterAssets(assets, query) {
     const hay = `${a.label} ${a.kind} ${a.ordinal} ${a.file || ""}`.toLowerCase();
     return hay.includes(q) || `@${a.label}`.toLowerCase().includes(q);
   });
-}
-
-export function syncColumns(ta, bd) {
-  if (!ta || !bd || !ta.isConnected) return;
-  bd.style.paddingRight = "";
-  bd.style.width = "";
-  const cs = getComputedStyle(ta);
-  const bs = getComputedStyle(bd);
-  const taText = ta.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const padR = parseFloat(bs.paddingRight);
-  const bdText = bd.clientWidth - parseFloat(bs.paddingLeft) - padR;
-  if (!(taText > 0) || !(bdText > 0)) return;
-  const gap = bdText - taText;
-  if (Math.abs(gap) < 0.5) return;
-  if (padR + gap >= 0) bd.style.paddingRight = padR + gap + "px";
-  else bd.style.width = Math.max(0, bd.offsetWidth - gap) + "px";
 }

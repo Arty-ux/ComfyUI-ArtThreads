@@ -28,10 +28,9 @@ export function applyPopupZoom(pop, opts = {}) {
   return zoom;
 }
 
-export function placeZoomedPopup(pop, anchorEl, opts = {}) {
+export function placeZoomedPopupAt(pop, rect, opts = {}) {
   const zoom = applyPopupZoom(pop, opts);
-
-  const r = anchorEl.getBoundingClientRect();
+  const r = rect || { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   const margin = opts.margin == null ? 8 : opts.margin;
   const gap = opts.gap == null ? 4 : opts.gap;
 
@@ -39,21 +38,29 @@ export function placeZoomedPopup(pop, anchorEl, opts = {}) {
     ? Math.min(Math.round(window.innerWidth * 0.9), Math.round(opts.baseMaxWidthPx * zoom))
     : Math.round(window.innerWidth * 0.9);
   pop.style.maxWidth = maxW + "px";
-  if (opts.anchorWidthIsMin !== false) {
-    const wantMin = Math.max(opts.minWidthPx || 200, Math.round(r.width));
+  if (opts.anchorWidthIsMin === false) {
+    pop.style.minWidth = Math.min(opts.minWidthPx || 200, maxW) + "px";
+  } else {
+    const wantMin = Math.max(opts.minWidthPx || 200, Math.round(r.width || 0));
     pop.style.minWidth = Math.min(wantMin, maxW) + "px";
   }
 
   const pw = pop.offsetWidth;
-  let left = Math.round(r.left);
+  let left = Math.round(r.left || 0);
   if (left + pw > window.innerWidth - margin) left = Math.max(margin, window.innerWidth - margin - pw);
   pop.style.left = left + "px";
 
   const h = pop.offsetHeight;
-  const below = window.innerHeight - r.bottom;
-  pop.style.top = (below < h + margin && r.top > h + margin)
-    ? Math.round(r.top - h - gap) + "px"
-    : Math.round(r.bottom + gap) + "px";
+  const top = r.top || 0;
+  const bottom = r.bottom != null ? r.bottom : top + (r.height || 0);
+  const below = window.innerHeight - bottom;
+  pop.style.top = (below < h + margin && top > h + margin)
+    ? Math.round(top - h - gap) + "px"
+    : Math.round(bottom + gap) + "px";
 
   return zoom;
+}
+
+export function placeZoomedPopup(pop, anchorEl, opts = {}) {
+  return placeZoomedPopupAt(pop, anchorEl.getBoundingClientRect(), opts);
 }

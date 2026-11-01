@@ -30,6 +30,8 @@ def test_node_mappings():
         "ArtThreadsRunTimer",
         "ArtThreadsMiniMaxH3ReferenceToImage",
         "ArtThreadsMiniMaxH3ReferenceToImageMaxQuality",
+        "ArtThreadsLTXUnpackReferences",
+        "ArtThreadsLTXStillLength",
     }
     assert expected == set(NODE_CLASS_MAPPINGS)
     assert expected == set(NODE_DISPLAY_NAME_MAPPINGS)
@@ -40,6 +42,14 @@ def test_node_mappings():
     assert (
         NODE_DISPLAY_NAME_MAPPINGS["ArtThreadsMiniMaxH3ReferenceToImageMaxQuality"]
         == "Reference to Image Max Quality ArtThreads"
+    )
+    assert (
+        NODE_DISPLAY_NAME_MAPPINGS["ArtThreadsLTXUnpackReferences"]
+        == "LTX Unpack References ArtThreads"
+    )
+    assert (
+        NODE_DISPLAY_NAME_MAPPINGS["ArtThreadsLTXStillLength"]
+        == "LTX Still Length ArtThreads"
     )
 
 
@@ -86,3 +96,40 @@ def test_video_size_run():
     )
     assert (w, h) == (896, 512)
     assert tuple(img.shape) == (1, 64, 64, 3)
+
+
+def test_ltx_still_length_run():
+    mod = _load_module("artthreads_ltx_still", "nodes/ltx_still_length.py")
+    assert mod.DEFAULT_STILL_LENGTH == 9
+    assert mod.STILL_LENGTH_OPTIONS == (9, 17, 25)
+    assert mod.ArtThreadsLTXStillLength().run() == (9,)
+    assert mod.ArtThreadsLTXStillLength().run(frames=17) == (17,)
+    with pytest.raises(ValueError, match="still length"):
+        mod.ArtThreadsLTXStillLength().run(frames=8)
+
+
+def test_ltx_unpack_mapping():
+    pytest.importorskip("torch")
+    import torch
+
+    mod = _load_module("artthreads_ltx_unpack_lib", "lib/ltx_unpack.py")
+    t = [torch.zeros(1, 4 + i, 6 + i, 3) for i in range(5)]
+
+    pic1, pic2, pic3, pic4, background = mod.map_refs_to_ltx_slots((t[0],))
+    assert pic1 is t[0]
+    assert (pic2, pic3, pic4, background) == (None, None, None, None)
+
+    pic1, pic2, pic3, pic4, background = mod.map_refs_to_ltx_slots((t[0], t[1]))
+    assert pic1 is t[0]
+    assert background is t[1]
+    assert (pic2, pic3, pic4) == (None, None, None)
+
+    pic1, pic2, pic3, pic4, background = mod.map_refs_to_ltx_slots(tuple(t))
+    assert pic1 is t[0]
+    assert pic2 is t[1]
+    assert pic3 is t[2]
+    assert pic4 is t[3]
+    assert background is t[4]
+
+    with pytest.raises(ValueError, match="empty"):
+        mod.map_refs_to_ltx_slots(())

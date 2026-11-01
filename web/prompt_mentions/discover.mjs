@@ -8,6 +8,8 @@ import {
   REF_TO_IMAGE_CLASS,
   REF_TO_IMAGE_MAX_QUALITY_CLASS,
   CONDITIONING_CLASSES,
+  LTX_UNPACK_CLASS,
+  MULTIREF_BRIDGE_CLASSES,
   MULTIREF_CLASS,
   LOAD_AUDIO_CLASS,
   AUTO_AUDIO_CLASS,
@@ -170,18 +172,32 @@ function findFixedAudioRefs(promptNode) {
   return findConditioningNode(promptNode);
 }
 
-function findMultiRef(fixed) {
-  if (!fixed) return null;
+function multiRefFromBridge(bridge) {
+  if (!bridge) return null;
   for (const name of ["artthreads_ref_images", "ref_images"]) {
-    const origin = linkedOrigin(fixed, name);
+    const origin = linkedOrigin(bridge, name);
     if (!origin) continue;
     if (nodeClass(origin) === MULTIREF_CLASS) return origin;
     for (const n of walkUpstream(origin)) {
       if (nodeClass(n) === MULTIREF_CLASS) return n;
     }
   }
-  const graph = fixed.graph || activeGraph();
-  const nodes = graph?._nodes || graph?.nodes || [];
+  return null;
+}
+
+function findMultiRef(bridge, graph) {
+  const fromBridge = multiRefFromBridge(bridge);
+  if (fromBridge) return fromBridge;
+
+  const g = graph || bridge?.graph || activeGraph();
+  const nodes = g?._nodes || g?.nodes || [];
+
+  // LTX still graphs: Prompt Mentions → CLIPTextEncode (no H3 cond). Prefer unpack → MultiRef.
+  for (const n of nodes) {
+    if (nodeClass(n) !== LTX_UNPACK_CLASS) continue;
+    const viaUnpack = multiRefFromBridge(n);
+    if (viaUnpack) return viaUnpack;
+  }
   for (const n of nodes) {
     if (nodeClass(n) === MULTIREF_CLASS) return n;
   }
@@ -315,7 +331,13 @@ function pictureAssetsFromMulti(multi) {
 export function discoverAssets(promptNode) {
   const graph = promptNode?.graph || activeGraph();
   const fixed = findFixedAudioRefs(promptNode);
-  const multi = findMultiRef(fixed);
+  // Prefer H3 conditioning bridge; otherwise any MultiRef bridge (incl. LTX unpack) on the graph.
+  let bridge = fixed;
+  if (!bridge) {
+    const nodes = graph?._nodes || graph?.nodes || [];
+    bridge = nodes.find((n) => MULTIREF_BRIDGE_CLASSES.includes(nodeClass(n))) || null;
+  }
+  const multi = findMultiRef(bridge, graph);
   const pictures = pictureAssetsFromMulti(multi);
   const source = sourceAudioAsset(fixed?.graph || graph);
   const audios = audioAssetsFromFixed(fixed);

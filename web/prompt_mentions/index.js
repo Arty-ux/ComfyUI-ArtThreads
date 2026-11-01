@@ -8,7 +8,11 @@ import {
   installResizeFloor,
 } from "../shared/index.mjs";
 import { isGraphLoading } from "../shared/graph_loading.mjs";
-import { installNodeAccent, registerNodeSettings, repaintAccent } from "../shared/node_settings.mjs";
+import {
+  installNodeAccent,
+  registerNodeAccent,
+  repaintAccent,
+} from "../shared/node_settings.mjs";
 import {
   CLASS,
   MIN_W,
@@ -16,10 +20,13 @@ import {
   DEFAULT_W,
   DEFAULT_H,
   WIDGET_MIN_H,
+  NODE_COLOR,
+  NODE_BGCOLOR,
+  DEFAULT_ACCENT,
 } from "./core.mjs";
 import { buildFace, renderFace, destroyFace, injectCSS, closeAC, refreshAssets } from "./ui.mjs";
 
-registerNodeSettings(CLASS, {
+registerNodeAccent(CLASS, {
   title: "Prompt Mentions",
   ownMenuItem: false,
   onChange: (node) => {
@@ -27,6 +34,20 @@ registerNodeSettings(CLASS, {
     repaintAccent(node);
   },
 });
+
+/** Title/body chrome. Migrate LiteGraph brown (#322/#533) back to green. */
+function ensureGreenChrome(node) {
+  if (!node) return;
+  const c = String(node.color || "").toLowerCase();
+  const b = String(node.bgcolor || "").toLowerCase();
+  const brown = c === "#322" || b === "#533" || c === "#332222" || b === "#553333";
+  if (!c || !b || brown) {
+    node.color = NODE_COLOR;
+    node.bgcolor = NODE_BGCOLOR;
+  }
+  if (!node.properties) node.properties = {};
+  if (!node.properties.atAccent) node.properties.atAccent = DEFAULT_ACCENT;
+}
 
 function refreshAllPromptMentions() {
   const nodes = (app.graph?._nodes || app.graph?.nodes || []).filter(
@@ -92,6 +113,7 @@ app.registerExtension({
     const _created = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       _created?.apply(this, arguments);
+      ensureGreenChrome(this);
       const root = buildFace(this);
       const w = this.addDOMWidget("prompt_mentions_ui", "artthreads_prompt_mentions", root, {
         serialize: false,
@@ -115,6 +137,7 @@ app.registerExtension({
     const _configure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function () {
       const r = _configure?.apply(this, arguments);
+      ensureGreenChrome(this);
       renderFace(this);
       queueMicrotask(() => renderFace(this));
       return r;
@@ -146,6 +169,7 @@ app.registerExtension({
 
   loadedGraphNode(node) {
     if (node?.comfyClass !== CLASS && node?.type !== CLASS) return;
+    ensureGreenChrome(node);
     queueMicrotask(() => renderFace(node));
   },
 

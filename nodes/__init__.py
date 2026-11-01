@@ -31,6 +31,8 @@ _modules = [
         "monitor",
         "run_timer",
         "reference_to_image",
+        "ltx_unpack_references",
+        "ltx_still_length",
     )
 ]
 
